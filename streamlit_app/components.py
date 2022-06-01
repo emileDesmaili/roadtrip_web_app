@@ -12,6 +12,8 @@ import openrouteservice
 from openrouteservice import convert
 import json
 import folium
+import pandas as pd
+import requests
 
 
 
@@ -25,12 +27,13 @@ class City:
     def __init__(self,name,duration=0):
         self.name = name
         self.duration = duration
+
     
     def geocode(self):
         """geocoding method that turns name and state into a lat & long attributes
         """
         geolocator = Nominatim(user_agent="my_app")
-        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=3)
+        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
         loc_string = self.name
         location = geolocator.geocode(loc_string)
         lat = location.latitude
@@ -38,41 +41,65 @@ class City:
         self.lat = lat
         self.lon = lon
     
+
+
+class Route:
+
+    def __init__(self, start, finish):
+        self.start = start
+        self.finish = finish
+    @st.cache()
+    def compute_(self):
+        client = openrouteservice.Client(key='5b3ce3597851110001cf624857ac41a9e1574cd5aecd7f089e686084')
+        start = City(self.start)
+        finish = City(self.finish)
+        start.geocode()
+        finish.geocode()
+        coords = ((start.lon, start.lat),(finish.lon, finish.lat))
+        res = client.directions(coords)
+        geometry = client.directions(coords)['routes'][0]['geometry']
+        self.decoded = convert.decode_polyline(geometry)
+        self.distance = res['routes'][0]['summary']['distance']
+        self.duration = res['routes'][0]['summary']['duration']
+        self.distance_txt = "<h4> <b>Distance :&nbsp" + "<strong>"+str(round(res['routes'][0]['summary']['distance']/1000,1))+" Km </strong>" +"</h4></b>"
+        self.duration_txt = "<h4> <b>Duration :&nbsp" + "<strong>"+str(round(res['routes'][0]['summary']['duration']/(60*60*24),1))+" Days. </strong>" +"</h4></b>"
     
+    def get_price(self):
+        API_KEY = 'CJGXXM6MW5QTI080'
+        
+        url = 'https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=EUR&to_symbol=USD&apikey=CJGXXM6MW5QTI080'
+        r = requests.get(url)
+        data = r.json()
+
+        self.gas = 0
+        self.price = self.distance*self.gas 
 
 
 
-def get_route(city1,city2):
-    client = openrouteservice.Client(key='5b3ce3597851110001cf624857ac41a9e1574cd5aecd7f089e686084')
-    city1 = City(city1)
-    city1.geocode()
-    city2 = City(city2)
-    city2.geocode()
-    coords = ((city1.lon, city1.lat),(city2.lon,city2.lat))
-    res = client.directions(coords)
-    geometry = client.directions(coords)['routes'][0]['geometry']
-    decoded = convert.decode_polyline(geometry)
-
-    distance_txt = "<h4> <b>Distance :&nbsp" + "<strong>"+str(round(res['routes'][0]['summary']['distance']/1000,1))+" Km </strong>" +"</h4></b>"
-    duration_txt = "<h4> <b>Duration :&nbsp" + "<strong>"+str(round(res['routes'][0]['summary']['duration']/60,1))+" Mins. </strong>" +"</h4></b>"
-
-    m = folium.Map(location=[6.074834613830474, 80.25749815575348],zoom_start=4, control_scale=True,tiles="cartodbpositron")
-    folium.GeoJson(decoded).add_child(folium.Popup(distance_txt+duration_txt,max_width=300)).add_to(m)
-
-    folium.Marker(
-        location=list(coords[0][::-1]),
-        popup="Galle fort",
-        icon=folium.Icon(color="green"),
-    ).add_to(m)
-
-    folium.Marker(
-        location=list(coords[1][::-1]),
-        popup="Jungle beach",
-        icon=folium.Icon(color="red"),
-    ).add_to(m)
-    return m
 
 
+def aggrid_display(df):
+    gb = GridOptionsBuilder.from_dataframe(df)
+    gb.configure_grid_options(rowHeight=40)
+    gb.configure_pagination()
+    gb.configure_side_bar()
+    gb.configure_default_column(
+                                min_column_width =3, groupable=True, value=True, enableRowGroup=True,
+                                aggFunc="sum", editable=True, enableRangeSelection=True,
+                                )
+    gb.configure_selection(selection_mode = 'multiple', use_checkbox=False, groupSelectsChildren=True, groupSelectsFiltered=True)
+    gridOptions = gb.build()
+    # display main dataframe
+    if not df.empty:
+        grid_response = AgGrid(df, gridOptions=gridOptions, enable_enterprise_modules=True,
+        fit_columns_on_grid_load=False, allow_unsafe_jscode= True, data_return_mode = DataReturnMode.FILTERED_AND_SORTED, update_mode=GridUpdateMode.SELECTION_CHANGED,
+        height=300, theme="material"
+        )
+        #df = grid_response['data']
+        # selected = grid_response['selected_rows']
+        # selected_df = pd.DataFrame(selected)
+    else:
+        st.info("No itinerary")
     
 
 

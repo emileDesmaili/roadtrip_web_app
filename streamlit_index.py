@@ -8,7 +8,9 @@ from streamlit_option_menu import option_menu
 from streamlit import components
 from streamlit_folium import folium_static
 import folium
-from streamlit_app.components import City, get_route
+from streamlit_app.components import City, Route, aggrid_display
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode,JsCode
+from st_aggrid.grid_options_builder import GridOptionsBuilder
 
 
 
@@ -59,10 +61,21 @@ with page_container:
 
 
 if page == 'Main Page':
-    if "duration" not in st.session_state:
-        st.session_state["duration"] = 0
+    if "durations" not in st.session_state:
+        st.session_state["durations"] = []
     if "cities" not in st.session_state:
         st.session_state["cities"] = []
+    if "last_city" not in st.session_state:
+        st.session_state["last_city"] = ''
+    if "distance" not in st.session_state:
+        st.session_state["distances"] = []
+    if "stays" not in st.session_state:
+        st.session_state["stays"] = []
+    if "routes" not in st.session_state:
+        st.session_state["routes"] = []
+    
+    
+    
     st.subheader("Add a city to the road trip")
     with st.form("add_city"):
         col1, col2  = st.columns(2)
@@ -74,10 +87,13 @@ if page == 'Main Page':
         submitted = st.form_submit_button("Submit")
         if submitted:
             #session state variables for cities
-
+        
             st.session_state["cities"].append(city)
+            idx_start = min(len(st.session_state["cities"]),2)*-1
+
+            st.session_state["last_city"] = st.session_state["cities"][idx_start] #penultimate value is the last city aka the starting point for routes
             
-            st.session_state["duration"] += length
+            st.session_state["stays"].append(length)
             #creation of city object
             if city not in st.session_state:
                 st.session_state[city] = City(city, length)
@@ -85,37 +101,96 @@ if page == 'Main Page':
             else:
                 st.session_state[city] = City(city, length)
                 st.session_state[city].geocode()
+            #create map     
+            #starting city is the first
+            if  len(st.session_state["cities"]) !=0:
+                start = st.session_state["last_city"]
+                start = st.session_state[start]
+                tooltip_start = start.name
+                #creation of the session state map
+                if "m" not in st.session_state:
+                    st.session_state["m"] = folium.Map(location=[start.lat, start.lon], zoom_start=4, control_scale=True,tiles="cartodbpositron")
+                # add initial marker
+                    folium.Marker(
+                        [start.lat, start.lon], popup=start.name, tooltip=start.name
+                    ).add_to(st.session_state["m"])
 
-    
-    st.metric("Road Trip Duration",st.session_state["duration"])
+                # if two or more cities, route creation
+                if len(st.session_state["cities"]) >=2:
+                    
+                    start = st.session_state["last_city"]
+                    start = st.session_state[start]
+                    
+                    finish  = st.session_state["cities"][-1]
+                    finish = st.session_state[finish]
+                    
 
-    #display map        
+                    route_id = "route_id"+ str(len(st.session_state["cities"])-1)
+                    st.session_state["routes"].append(route_id)
+                    if route_id not in st.session_state:
+                        st.session_state[route_id] = Route(start.name, finish.name)
+                    
+                    st.session_state[route_id].compute_()
+                    st.session_state["durations"].append(st.session_state[route_id].duration/(60*60*24))
+                    st.session_state["distances"].append(st.session_state[route_id].distance/1000)
 
-    if  len(st.session_state["cities"]) !=0:
-        start = st.session_state["cities"][0]
-        start = st.session_state[start]
+                    
+                    #adding markers
+                    folium.Marker(
+                        [start.lat, start.lon], popup=start.name, tooltip=start.name
+                    ).add_to(st.session_state["m"])
 
-        m = folium.Map(location=[start.lat,start.lon], zoom_start=4, control_scale=True,tiles="cartodbpositron")
-        # add markers
-        tooltip = start.name
-        folium.Marker(
-            [start.lat, start.lon], popup=start.name, tooltip=tooltip
-        ).add_to(m)
+                    folium.Marker(
+                    [finish.lat, finish.lon], popup=finish.name, tooltip=finish.name
+                    ).add_to(st.session_state["m"])
 
-        for city in st.session_state["cities"]:
-            city = st.session_state[city]
-            tooltip = city.name
-            folium.Marker(
-            [city.lat, city.lon], popup=city.name, tooltip=tooltip
-            ).add_to(m)
+                    folium.GeoJson(st.session_state[route_id].decoded).add_child(folium.Tooltip(st.session_state[route_id].distance_txt+st.session_state[route_id].duration_txt)).add_to(st.session_state["m"])
 
-        # call to render Folium map in Streamlit
-        folium_static(m,width=1200, height=700)
-    else:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Road Trip Duration",round(sum(st.session_state["durations"])/(60*60*24)+sum(st.session_state["stays"]),1))
+    with col2:
+        st.metric("Road Trip Distance",round(sum(st.session_state["distances"])/1000,1))
+    with col3:
+        st.metric("Road Trip Expenses",10000)
+
+
+    # call to render Folium map in Streamlit
+    try:
+        folium_static(st.session_state["m"],width=1200, height=700)
+    except KeyError:
         pass
-    if  len(st.session_state["cities"]) !=0:
-        m2 = get_route(st.session_state["cities"][0],st.session_state["cities"][1])
-        folium_static(m2,width=1200, height=700)
+    # display individual itineraries
+    st.subheader ("Itineraries")
+        
+    
+    def itineraries_df():
+        starts = []
+        finishes = []
+        durations = []
+        distances = []
+        for route in st.session_state["routes"]:
+            route = st.session_state[route]
+            route.compute_()
+            starts.append(route.start)
+            finishes.append(route.finish)
+            durations.append(route.duration)
+            distances.append(route.distance)
+        df = pd.DataFrame(list(zip(starts,finishes,durations,distances)), columns = ['Start','Finish', 'Duration','Distance'])
+        return df
+          
+
+
+    df_routes = itineraries_df()
+    aggrid_display(df_routes)
+
+
+
+
+
+        
+
+
 
 
    
