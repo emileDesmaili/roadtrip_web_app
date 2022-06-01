@@ -14,6 +14,11 @@ import json
 import folium
 import pandas as pd
 import requests
+from fredapi import Fred
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode,JsCode
+from st_aggrid.grid_options_builder import GridOptionsBuilder
+import datetime
+
 
 
 
@@ -48,7 +53,7 @@ class Route:
     def __init__(self, start, finish):
         self.start = start
         self.finish = finish
-    @st.cache()
+    
     def compute_(self):
         client = openrouteservice.Client(key='5b3ce3597851110001cf624857ac41a9e1574cd5aecd7f089e686084')
         start = City(self.start)
@@ -65,14 +70,34 @@ class Route:
         self.duration_txt = "<h4> <b>Duration :&nbsp" + "<strong>"+str(round(res['routes'][0]['summary']['duration']/(60*60*24),1))+" Days. </strong>" +"</h4></b>"
     
     def get_price(self):
-        API_KEY = 'CJGXXM6MW5QTI080'
-        
-        url = 'https://www.alphavantage.co/query?function=FX_DAILY&from_symbol=EUR&to_symbol=USD&apikey=CJGXXM6MW5QTI080'
-        r = requests.get(url)
-        data = r.json()
+        fred_api_key = '7294815d2a10429894fa3423865fea22'
+        fred = Fred(api_key= fred_api_key)
+        date = '01-06-2022'
+        oil = fred.get_series('DCOILWTICO',observation_start=date)[-1]
+        eurusd = fred.get_series('DEXUSEU',observation_start=date)[-1]
+        # assumptions to be made here
+        liters_per_km = 20/100
+        liters_per_barrel = 159
+        usd_per_barrel = oil  
+        usd_per_km = liters_per_km * oil * (1/liters_per_barrel)
+        self.price = round(self.distance/1000 * usd_per_km * (1/eurusd),1)
 
-        self.gas = 0
-        self.price = self.distance*self.gas 
+
+    
+def get_prices():
+    #Alpha vantage API_KEY = 'CJGXXM6MW5QTI080'
+    fred_api_key = '7294815d2a10429894fa3423865fea22'
+    fred = Fred(api_key= fred_api_key)
+    prices_df = pd.DataFrame()
+    prices_df['SPX'] = fred.get_series('SP500')
+    prices_df['oil'] = fred.get_series('DCOILWTICO')
+    prices_df['USD'] = fred.get_series('DTWEXBGS')
+    prices_df['infla'] = fred.get_series('T5YIFR')
+    return prices_df.dropna(axis=0)
+
+
+
+    
 
 
 

@@ -8,9 +8,12 @@ from streamlit_option_menu import option_menu
 from streamlit import components
 from streamlit_folium import folium_static
 import folium
-from streamlit_app.components import City, Route, aggrid_display
+from streamlit_app.components import City, Route, aggrid_display, get_prices
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode,JsCode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 
 
@@ -73,6 +76,8 @@ if page == 'Main Page':
         st.session_state["stays"] = []
     if "routes" not in st.session_state:
         st.session_state["routes"] = []
+    if "expenses" not in st.session_state:
+        st.session_state["expenses"] = []
     
     
     
@@ -148,11 +153,11 @@ if page == 'Main Page':
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Road Trip Duration",round(sum(st.session_state["durations"])/(60*60*24)+sum(st.session_state["stays"]),1))
+        st.metric("Road Trip Duration (Days)",round(sum(st.session_state["durations"])/(60*60*24)+sum(st.session_state["stays"]),1))
     with col2:
-        st.metric("Road Trip Distance",round(sum(st.session_state["distances"])/1000,1))
+        st.metric("Road Trip Distance (Kms)",round(sum(st.session_state["distances"]),1))
     with col3:
-        st.metric("Road Trip Expenses",10000)
+        st.metric("Road Trip Expenses (K€)",round(sum(st.session_state["expenses"])/1000,1))
 
 
     # call to render Folium map in Streamlit
@@ -169,20 +174,31 @@ if page == 'Main Page':
         finishes = []
         durations = []
         distances = []
+        prices = []
         for route in st.session_state["routes"]:
             route = st.session_state[route]
             route.compute_()
-            starts.append(route.start)
-            finishes.append(route.finish)
-            durations.append(route.duration)
-            distances.append(route.distance)
-        df = pd.DataFrame(list(zip(starts,finishes,durations,distances)), columns = ['Start','Finish', 'Duration','Distance'])
+            route.get_price()
+            starts.append(route.start.title())
+            finishes.append(route.finish.title())
+            durations.append(round(route.duration/(60*60*24),1))
+            distances.append(round(route.distance/1000,1))
+            prices.append(round(route.price,1))
+        df = pd.DataFrame(list(zip(starts,finishes,durations,distances, prices)), columns = ['Start','Finish', 'Duration (Days)','Distance (Kms)','Gas Price (EUR)'])
         return df
           
 
 
     df_routes = itineraries_df()
     aggrid_display(df_routes)
+
+if page == 'Budget':
+    prices = get_prices()
+    prices
+
+    fig = px.line(prices)
+    st.plotly_chart(fig, x = prices.index, y = prices.columns) 
+
 
 
 
