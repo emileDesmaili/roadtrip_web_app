@@ -1,264 +1,80 @@
 #library imports
 
 
-import re
-import random
-import pandas as pd
-from dataclasses import dataclass
-from typing import Optional, List
-import requests
-from bs4 import BeautifulSoup
-import streamlit as st
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from io import BytesIO
-import datetime
-import numpy as np
-from IPython.display import HTML
-from multiprocessing.dummy import Pool as ThreadPool
-from multiprocessing import Pool
-from pytrends.request import TrendReq
-import networkx as nx
-from streamlit_agraph import agraph, Node, Edge, Config
-import smtplib
-from email.mime.text import MIMEText
 
-import json
-from textblob import TextBlob
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from dateutil import parser
-from st_aggrid import AgGrid
-from st_aggrid.grid_options_builder import GridOptionsBuilder
-from googletrans import Translator
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
-from sklearn.preprocessing import StandardScaler
+
+
+import streamlit as st
+
 from geopy.geocoders import Nominatim
 from geopy.extra.rate_limiter import RateLimiter
-from streamlit_tags import st_tags, st_tags_sidebar
-from streamlit.state.session_state import SessionState
-import unidecode
-from pptx import Presentation 
-from pptx.util import Inches, Pt
-from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
-import matplotlib.pyplot as plt
-from nltk.corpus import stopwords
-import spacy
-from spacy import displacy
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline, AutoModelForSequenceClassification
-import transformers
-from sentence_transformers import SentenceTransformer, util
+import openrouteservice
+from openrouteservice import convert
+import json
+import folium
 
 
 
 
 
 
-# checkbox function
-def create_checkbox(field,data):
-    """creates a streamlit checkbox from a string in the streamlit dataframe
-
-    Args:
-        field (string): 
-
-    Returns:
-        streamlit object: 
-    """
-    field_data = data[field].unique()
-    container = st.sidebar.container()
-    all = st.sidebar.checkbox(f"Select all {field}s", value = True)
-    if all:
-        selected_options = container.multiselect(f"Select one or more {field}:",
-         field_data,field_data)
-    else:
-        selected_options =  container.multiselect(f"Select one or more {field}:",
-        field_data)
-    return selected_options
 
 
-def generate_shareholders_df(json_dict):
-    if json_dict['CSH_TOTAL_PCT']:
-        pct = json_dict['CSH_TOTAL_PCT'] 
-    elif json_dict['DUO_TOTAL_PCT']: 
-        pct = json_dict['DUO_TOTAL_PCT']
-    else:
-        pct= None
-    if json_dict['CSH_ENTITY_TYPE']:
-        entity_type = json_dict['CSH_ENTITY_TYPE']
-    elif json_dict['DUO_ENTITY_TYPE']:
-        entity_type = json_dict['DUO_ENTITY_TYPE']
-    else:
-        entity_type = None
+class City:
 
-    data = zip(pct,entity_type)
-    df = pd.DataFrame(data).transpose()
-    if json_dict['CSH_NAME']:
-        df.columns = json_dict['CSH_NAME']
-    elif json_dict['DUO_NAME']:
-        df.columns = json_dict['DUO_NAME']
-
-    return df
-
-def generate_shareholders_treemap(json_dict):
-    GUO = json_dict['GUO_NAME']*3 if json_dict['GUO_NAME'] else [None]*3
-    DUO = json_dict['DUO_NAME']*3 if json_dict['DUO_NAME'] else [None]*3
-    ISH = json_dict['ISH_NAME']*3 if json_dict['ISH_NAME'] else json_dict['DUO_NAME']*3 
-    pct = [0.1,0.1,1]
-    df = pd.DataFrame(dict(GUO=GUO, DUO=DUO, ISH=ISH, pct=pct))
-
-    fig = px.treemap(df, path=['GUO', 'DUO', 'ISH'], values='pct')
-    st.plotly_chart(fig)
-
-def graph_shareholders(firm,json_dict):
-        nodes = []
-        edges = []
-
-        nodes.append( Node(id=firm, label = firm, size=1000, color = "#0a2357" ))
-        if json_dict['GUO_NAME']:
-            for i in range(len(json_dict['GUO_NAME'])):
-                name = json_dict['GUO_NAME'][i]
-                try:
-                    pct = "{:.0%}".format(float(json_dict['GUO_DIRECT_PCT'][i])/100)
-                except:
-                    pct = None
-                    
-                nodes.append( Node(id=str(name),
-                label=name,
-                size=800,
-                color="#fc0349")
-                ) 
-                edges.append( Edge(source=str(name), 
-                label=pct, 
-                target=firm )
-                )       
-        if json_dict['DUO_NAME']:
-            for i in range(len(json_dict['DUO_NAME'])):
-                name = json_dict['DUO_NAME'][i]
-                try:
-                    
-                    pct = "{:.0%}".format(float(json_dict['DUO_DIRECT_PCT'][i])/100)
-                except:
-                    pct = None
-                nodes.append( Node(id=str(name),
-                label=name,
-                size=800,
-                color="#fc0349")
-                )
-                edges.append( Edge(source=str(name), 
-                label=pct, 
-                target=firm )
-                )
-        if json_dict['ISH_NAME']:
-            for i in range(len(json_dict['ISH_NAME'])):
-                name = json_dict['ISH_NAME'][i]
-                try:
-
-                    pct = "{:.0%}".format(float(json_dict['ISH_DIRECT_PCT'][i])/100)
-                except:
-                    pct = None
-                nodes.append( Node(id=str(name),
-                label=name,
-                size=800,
-                color="#fc0349")
-                )
-                edges.append( Edge(source=str(name), 
-                label=pct, 
-                target=firm )
-                )
-
-
-
-
-        config = Config(width=1000, 
-                        height=500, 
-                        directed=True,
-                        nodeHighlightBehavior=True, 
-                        highlightColor="#778ebd", # or "blue"
-                        collapsible=True,
-                        node={'labelProperty':'label'},
-                        link={'labelProperty': 'label', 'renderLabel': True}
-                        # **kwargs e.g. node_size=1000 or node_color="blue"
-                        ) 
-
-        return_value = agraph(nodes=nodes, 
-                            edges=edges, 
-                            config=config)
-        return return_value
-
-
-
-
-
-@st.cache(show_spinner=False)
-def get_linkedin(name):
-    USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:65.0) Gecko/20100101 Firefox/66.0"
-    )
-    query = f"{name}"
-    query = query.replace(" ", "+")
-    URL = f"https://google.com/search?q={query}+linkedin"
-    headers = {"user-agent": USER_AGENT}
+    def __init__(self,name,duration=0):
+        self.name = name
+        self.duration = duration
     
-    query = requests.get(URL,headers=headers)
+    def geocode(self):
+        """geocoding method that turns name and state into a lat & long attributes
+        """
+        geolocator = Nominatim(user_agent="my_app")
+        geocode = RateLimiter(geolocator.geocode, min_delay_seconds=3)
+        loc_string = self.name
+        location = geolocator.geocode(loc_string)
+        lat = location.latitude
+        lon = location.longitude
+        self.lat = lat
+        self.lon = lon
     
-    soup = BeautifulSoup(query.content, "html.parser", from_encoding='utf8')
-    if soup.find('cite'):
-        links = soup.find('cite').text
-        links = links.split(' › ')[1]
-        linkedin='https://fr.linkedin.com/in/'+links
-        return linkedin
-    else:
-        return 'https://fr.linkedin.com/in/'
+    
 
 
-def generate_management_df(json_dict):
 
-    k = json_dict['CPYCONTACTS_HEADER_FullNameOriginalLanguagePreferred']
-    v = json_dict['CPYCONTACTS_MEMBERSHIP_Function']
-    df = pd.DataFrame(k)
-    if len(df.columns)>0:
-        df.columns=['Name']
-        df['Title'] = v
-        df = df.drop_duplicates(subset=['Name'], ignore_index=True)
-        df['linkedin']=df['Name'].apply(get_linkedin)
-        return df
-    else:
-        return df
+def get_route(city1,city2):
+    client = openrouteservice.Client(key='5b3ce3597851110001cf624857ac41a9e1574cd5aecd7f089e686084')
+    city1 = City(city1)
+    city1.geocode()
+    city2 = City(city2)
+    city2.geocode()
+    coords = ((city1.lon, city1.lat),(city2.lon,city2.lat))
+    res = client.directions(coords)
+    geometry = client.directions(coords)['routes'][0]['geometry']
+    decoded = convert.decode_polyline(geometry)
 
-def generate_financials_df(json_dict):
-    data = []
-    keys = []
-    columns=['Net Income', 'Turnover','EBITDA','Working Capital', 'Gearing','Leverage Ratio','Financial Debt',
-    'Cash Flow','Gross Margin','EBITDA Margin','ROA','ROE','Cash','EBIT','Operating Margin','Liquidity Ratio','Taxes']
-    if json_dict['Years']:
-        for year in json_dict['Years']:
-            keys.append(json_dict['Years'][year]['FISCAL_YEAR'])
-            data.extend([[
-                json_dict['Years'][year]['PL'],
-                json_dict['Years'][year]['OPRE'],
-                json_dict['Years'][year]['EBTA'],
-                json_dict['Years'][year]['WKCA'],
-                json_dict['Years'][year]['GEAR'],
-                json_dict['Years'][year]['SHLQ'],
-                json_dict['Years'][year]['LTDB'],
-                json_dict['Years'][year]['CF'],
-                json_dict['Years'][year]['GRMA'],
-                json_dict['Years'][year]['ETMA'],
-                json_dict['Years'][year]['ROA'],
-                json_dict['Years'][year]['ROE'],
-                json_dict['Years'][year]['CASH'],
-                json_dict['Years'][year]['OPPL'],
-                json_dict['Years'][year]['EBMA'],
-                json_dict['Years'][year]['LIQR'],
-                json_dict['Years'][year]['TAXA'],
-                ]])        
-        df = pd.DataFrame(data)
-        df.index = keys
-        df.columns = columns   
-        return df
-    else:
-        return pd.DataFrame(data)
+    distance_txt = "<h4> <b>Distance :&nbsp" + "<strong>"+str(round(res['routes'][0]['summary']['distance']/1000,1))+" Km </strong>" +"</h4></b>"
+    duration_txt = "<h4> <b>Duration :&nbsp" + "<strong>"+str(round(res['routes'][0]['summary']['duration']/60,1))+" Mins. </strong>" +"</h4></b>"
+
+    m = folium.Map(location=[6.074834613830474, 80.25749815575348],zoom_start=4, control_scale=True,tiles="cartodbpositron")
+    folium.GeoJson(decoded).add_child(folium.Popup(distance_txt+duration_txt,max_width=300)).add_to(m)
+
+    folium.Marker(
+        location=list(coords[0][::-1]),
+        popup="Galle fort",
+        icon=folium.Icon(color="green"),
+    ).add_to(m)
+
+    folium.Marker(
+        location=list(coords[1][::-1]),
+        popup="Jungle beach",
+        icon=folium.Icon(color="red"),
+    ).add_to(m)
+    return m
+
+
+    
+
 
 
 
@@ -359,261 +175,6 @@ def plot_news_sentiment(client,news_state_full):
 
 
 
-
-def plot_clusters(data,dim):
-    features = ['Turnover','Sector Code']
-    features = ['Sector Code']
-    np.random.seed(42)
-    scaler = StandardScaler()
-    kmeans_df = data.set_index('Name')[features].dropna()
-    kmeans_df['Sector Code'] = kmeans_df['Sector Code'].str.replace('.','').str[:-1] #not great
-    #kmeans_df['min'] = min([int(s) for s in data['Employee Range'][0].split() if s.isdigit()])
-    #kmeans_df['max'] = max([int(s) for s in data['Employee Range'][0].split() if s.isdigit()])
-    kmeans_df = pd.DataFrame(scaler.fit_transform(kmeans_df),columns=kmeans_df.columns, index=kmeans_df.index)
-    k=5 # no elbow/silhouette here...
-    make_cluster = KMeans(n_clusters=k)
-    KM_fit = make_cluster.fit_transform(kmeans_df)
-    dim_red = PCA(n_components=dim)
-    km_viz = dim_red.fit_transform(KM_fit) 
-    if dim == 3:
-        cluster_plot_df = pd.DataFrame(np.c_[km_viz, make_cluster.labels_+1],index=kmeans_df.index,columns=['PC1','PC2','PC3','cluster'])
-        fig = px.scatter_3d(cluster_plot_df, x='PC1', y='PC2',z='PC3', color='cluster', hover_name =cluster_plot_df.index,
-        hover_data={"PC1":False,"PC2":False, "PC3":False}, color_discrete_sequence=px.colors.sequential.Electric)
-        fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
-        fig.update_layout(scene=dict(xaxis=dict(showticklabels=False),yaxis=dict(showticklabels=False),
-        zaxis=dict(showticklabels=False),
-        ))
-    else:
-        cluster_plot_df = pd.DataFrame(np.c_[km_viz, make_cluster.labels_+1],index=kmeans_df.index,columns=['PC1','PC2','cluster'])
-        fig = px.scatter(cluster_plot_df, x='PC1', y='PC2', color='cluster', hover_name =cluster_plot_df.index,
-        hover_data={"PC1":False,"PC2":False}, color_discrete_sequence=px.colors.sequential.Electric)
-        fig.update_layout(yaxis_title=None, xaxis_title=None, yaxis_showticklabels=False, xaxis_showticklabels=False)
-        #fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
-    groups = cluster_plot_df.groupby('cluster').groups
-    cols = st.columns(k)
-    for i, x in enumerate(cols):
-        with x:
-            st.markdown("")
-            st.write(f"Cluster {i+1}")
-            st.markdown("***")
-            st.markdown(", ".join(groups[i+1].to_list()))
-    buff, figcol, buff2 = st.columns([1,4,1])
-    with figcol:
-        st.plotly_chart(fig)
-
-
-def plot_financials(client,json_dicts):
-    client_dict = json_dicts.loc[client][0]
-    fin_df = generate_financials_df(client_dict)
-    fin_df = fin_df.copy()
-    fin_df.index = pd.to_datetime(fin_df.index, format='%Y-%m-%d %H:%M:%S')
-    session_var_name = f'last_fin{client}'
-    session_state_df = st.session_state[session_var_name]
-    if 'Metric' in session_state_df.columns:
-        session_state_df = session_state_df.drop('Metric',axis=1)
-    session_state_df = session_state_df.transpose()
-    session_state_df.index = pd.to_datetime(session_state_df.index, format='%Y-%m-%d %H:%M:%S')
-    
-    new_fin_df = fin_df.append(session_state_df).drop_duplicates().sort_index()
-
-    fin_chart1, fin_chart2, fin_chart3 = st.columns(3)
-    margins = ['EBITDA Margin','Operating Margin']
-    ROIs = ['ROA','ROE']
-    profits = ['Turnover','EBITDA']
-    net_incomes = ['EBIT','Net Income']
-
-    if fin_df['Cash Flow'][0] is not None:
-        last_turnover_growth = "{:.0f} M€".format(fin_df['Cash Flow'][0]/1e6)
-    else: 
-        last_turnover_growth = '-'
-    if  fin_df['EBITDA Margin'][0] is not None:
-        last_EBITDA_margin = "{:.0%}".format(fin_df['EBITDA Margin'][0]/100)
-    else: 
-        last_EBITDA_margin = '-'
-    if  fin_df['Leverage Ratio'][0] is not None:
-        last_leverage = "{:.0%}".format(fin_df['Leverage Ratio'][0])
-    else: 
-        last_leverage = '-'
-    
-
-    fig1 = px.bar(new_fin_df.fillna(0), x=new_fin_df.index, y=profits, barmode='group',
-    width=200, height=400, color_discrete_map={
-        profits[0]: 'rgb(120, 186, 240)',
-        profits[1]: 'rgb(26, 118, 255)'
-    })
-    fig1.update_layout(margin={"r":50,"t":60,"l":50,"b":50})
-    fig1.update_layout(title =f'Cash Flow :   <b>{last_turnover_growth}</b>',title_x=0.45, title_y = 0.99,xaxis_title=None,yaxis_title=None) 
-    fig1.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
-    # fig1.update_layout(legend=dict(
-    # yanchor="top",
-    # y=0.99,
-    # xanchor="left",
-    # x=0.01
-    # ))
-    # text1=[fin_df['Turnover'].values,fin_df['Net Income'].values]
-    # for i, t in enumerate(text1):
-    #     fig1.data[i].text = t
-    #     fig1.data[i].textposition = 'outside'
-    #     fig1.data[i].texttemplate='%{y:.2s}'
-    # fig1.update_layout(uniformtext_minsize=10, uniformtext_mode='hide')
-
-    fig2 = px.bar(new_fin_df.fillna(0), x=new_fin_df.index, y=net_incomes,barmode='group',
-    width=200, height=400, color_discrete_map={
-        net_incomes[0]: 'rgb(120, 186, 240)',
-        net_incomes[1]: 'rgb(26, 118, 255)'
-    })
-    fig2.update_layout(title =f'EBITDA Margin:   <b>{last_EBITDA_margin}</b>',title_x=0.5, title_y = 0.99, xaxis_title=None,yaxis_title=None)
-    fig2.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
-    fig2.update_layout(margin={"r":50,"t":60,"l":50,"b":50})
-    # fig2.update_layout(legend=dict(
-    # yanchor="top",
-    # y=0.99,
-    # xanchor="left",
-    # x=0.01
-    # ))
-    # text2=[fin_df['EBITDA'][0:1],fin_df['EBIT'].iloc[0:1]]
-    # for i, t in enumerate(text1):
-    #     fig2.data[i].text = t
-    #     fig2.data[i].textposition = 'outside'
-    #     fig2.data[i].texttemplate='%{y:.2s}'
-    # fig2.update_layout(uniformtext_minsize=10, uniformtext_mode='hide')
-
-
-    fig3 = px.bar(new_fin_df.fillna(0), x=new_fin_df.index, y=ROIs,barmode='group',
-    width=200, height=400, color_discrete_map={
-        ROIs[0]: 'rgb(120, 186, 240)',
-        ROIs[1]: 'rgb(26, 118, 255)'
-    })
-    fig3.update_layout(title =f'Leverage:   <b>{last_leverage}</b>',title_x=0.45,title_y = 0.99, xaxis_title=None,yaxis_title=None)
-    fig3.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
-    fig3.update_layout(margin={"r":50,"t":60,"l":50,"b":50})
-    # fig3.update_layout(legend=dict(
-    # yanchor="bottom",
-    # y=-0.3,
-    # xanchor="left",
-    # x=0.01
-    # ))
-    # text3=[fin_df['ROA'].values,fin_df['ROE'].values]
-    # for i, t in enumerate(text3):
-    #     fig3.data[i].text = t
-    #     fig3.data[i].textposition = 'outside'
-    #     fig3.data[i].texttemplate='%{y:.2s}'
-    # fig3.update_layout(uniformtext_minsize=10, uniformtext_mode='hide')
-
-    with fin_chart1: 
-        st.plotly_chart(fig1, use_container_width=True)
-    with fin_chart2:
-        st.plotly_chart(fig2, use_container_width=True)
-    with fin_chart3: 
-        st.plotly_chart(fig3, use_container_width=True)
-    
-
-def plot_shareholders(client,json_dicts):
-    client_dict = json_dicts.loc[client][0]
-    df = generate_shareholders_df(client_dict)
-    chart = px.pie(df, values=df.iloc[0], names=df.columns, template='ggplot2',
-    width=150, height=150, color_discrete_sequence=px.colors.qualitative.Safe)
-    chart.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
-    chart.update_layout(showlegend=False)
-    chart.update_layout(font={'size': 15})
-    st.plotly_chart(chart, use_container_width=False)
-
-
-# @st.cache(show_spinner=False)
-# def firm_map(data):
-#         geolocator = Nominatim(user_agent="my_app")
-#         geocode = RateLimiter(geolocator.geocode, min_delay_seconds=3)
-
-#         country='France'
-#         loc_string = data["Address"][0]+","+str(int(data['Zip Code'][0]))+", "+country
-#         try:
-#             location = geolocator.geocode(loc_string)
-#             lat = location.latitude
-#             lon = location.longitude
-#             map_data = pd.DataFrame({'lat': [lat], 'lon': [lon]})
-#         except:
-#             try:
-#                 loc_string = str(int(data['Zip Code'][0]))+", "+country
-#                 location = geolocator.geocode(loc_string)
-#                 lat = location.latitude
-#                 lon = location.longitude
-#                 map_data = pd.DataFrame({'lat': [lat], 'lon': [lon]})
-#             except:
-#                 map_data = pd.DataFrame({'lat': [48], 'lon': [2.3]})
-
-#         return map_data
- 
-
-
-def get_tags(client,data):
-    data_filtered = data_filtered = data[data["Name"]==client].reset_index(drop=True)
-    #key=int(data[data['Name']==client].index[0])
-    keywords = st_tags(
-    label='',
-    text='Press enter to add more',
-    value=[data_filtered['Tags'][0]],
-    suggestions=['Great place to work', 'AI', 'early-stage', 
-                 'Data', 'ESG'],
-    maxtags = 10,key=client 
-    )
-
-
-def plot_spider_chart(data):
-    financials=['Net Income','Turnover','EBITDA','Cash Flow', 'Debt']
-    data_for_spider = data[financials].rank(pct=True).fillna(0).set_index(data['Name'])
-    
-    fig = go.Figure()
-    buff1, col1, col2, buf2 = st.columns([1,2,2,1])
-    with col1:
-        Firm1 = st.selectbox('firm 1',sorted(list(data['Name'])),key='spider1')
-    with col2:
-        Firm2 = st.selectbox('firm 2',sorted(list(data['Name'])),key='spider2')
-
-    if Firm1:
-        r1 = data_for_spider.loc[Firm1]
-    else:
-        r1=[0]*len(financials)
-    if Firm2:
-        r2 = data_for_spider.loc[Firm2]
-    else:
-        r2=[0]*len(financials)
-
-    fig.add_trace(go.Scatterpolar(
-        r= r1,
-        theta=financials,
-        fill='toself',
-        name= Firm1
-    ))
-    fig.add_trace(go.Scatterpolar(
-        r=r2,
-        theta=financials,
-        fill='toself',
-        name=Firm2
-    ))
-    fig.update_layout(
-    polar=dict(
-        radialaxis=dict(
-        visible=True,
-        range=[0, 1]
-        )),
-    showlegend=False
-    )
-    fig.update_layout(
-    autosize=False,
-    width=500,
-    height=500,
-    margin=dict(
-        l=50,
-        r=50,
-        b=50,
-        t=50,
-        pad=4
-    )
-    )
-    st.plotly_chart(fig,use_container_width=True)
-
-
-
 def plot_main_page_financials(data_filtered):
     fin_chart1, fin_chart2, fin_chart3 = st.columns(3)
     turnovers = ['Turnover']
@@ -683,208 +244,20 @@ def plot_main_page_financials(data_filtered):
         st.plotly_chart(fig3,use_container_width=True)
 
 
-def similarity_matrix(data):
-    NAF = data['Sector Code']
-    NAF = NAF.str.replace('.','').str[:-1]
-    NAF = NAF.astype(float)
-    def similarity(x,y):
-        return min(x,y) / max(x, y)
-    NAF_mat = np.zeros((len(NAF),len(NAF)))
-    for i in range(len(NAF_mat)):
-        for j in range(len(NAF_mat)):
-            NAF_mat[i,j] = similarity(NAF[i]/100,NAF[j]/100)
-    return NAF_mat
-
-@st.cache()
-def similarity_matrix2(data,nlp):
-
-    topics = data['Activity'].replace('[source: Bureau van Dijk]', '.').apply(nlp)
-    sim_mat = np.zeros((len(topics),len(topics)))
-    for i in range(len(sim_mat)):
-        for j in range(len(sim_mat)):
-            sim_mat[i,j] = topics[i].similarity(topics[j])
-
-    return sim_mat
-
-@st.cache(show_spinner=False)
-def similarity_matrix3(data):
-    model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
-    topics = np.array(data['Activity'].replace('[source: Bureau van Dijk]', '.'))
-    sim_mat = np.zeros((len(topics),len(topics)))
-    embs = model.encode(topics,convert_to_tensor=True)
-
-
-    for i in range(len(sim_mat)):
-        for j in range(len(sim_mat)):
-
-            sim_mat[i,j] = util.cos_sim(embs[i],embs[j])
-
-    return sim_mat
-
-def smart_search(text,data):
-    
-    my_bar = st.progress(5)
-    model = SentenceTransformer('sentence-transformers/paraphrase-MiniLM-L6-v2')
-    topics = np.array(data['Activity'].replace('[source: Bureau van Dijk]', '.'))
-    my_bar.progress(50)
-    text = model.encode(text,convert_to_tensor=True)
-    embs = model.encode(topics,convert_to_tensor=True)
-    my_bar.progress(75)
-    sim_vec = np.zeros((len(topics),1))
-    
-    for i in range(len(topics)):
-        sim_vec[i] = util.cos_sim(text, embs[i])
-
-    my_bar.progress(100)
-    
-    sim_vec = pd.DataFrame(np.array(sim_vec),index=data['Name'],columns=['score'])
-    sim_vec['name'] = sim_vec.index
-    my_bar.empty()
-    
-    return sim_vec
 
 
 
 
-  
-
-def similar_firms_graph(firm,similar_firms):
-    
-    nodes = []
-    edges = []
-
-    nodes.append( Node(id=firm, label = firm, size=1000, color = "#0a2357" ))
-
-    for i in range(0,len(similar_firms)):
-        idx = similar_firms.index[i].split()[:3]
-        nodes.append( Node(id=str(idx),
-                        label=idx,
-                        size=800,
-                        color="#5c8bed")
-                        )
-        edges.append( Edge(source=str(idx), 
-            label="", 
-            target=firm, 
-            type="STRAIGHT") 
-            )
-
-
-    config = Config(width=1000, 
-                    height=500, 
-                    directed=False,
-                    nodeHighlightBehavior=True, 
-                    highlightColor="#778ebd", # or "blue"
-                    collapsible=True,
-                    node={'labelProperty':'label'},
-                    link={'labelProperty': 'label', 'renderLabel': True}
-                    # **kwargs e.g. node_size=1000 or node_color="blue"
-                    ) 
-
-    return_value = agraph(nodes=nodes, 
-                        edges=edges, 
-                        config=config)
-    return return_value
-
-
-def network_graph(firm,json_dict,similar_firms):
-    
-    nodes = []
-    edges = []
-
-    nodes.append( Node(id=firm, label = firm, size=1000, color = "#aaa0db"))
-    nodes.append( Node(id="competitors", label="Competitors", size=1000, color = "#0a2357" ))
-    #nodes.append( Node(id="managers", label="Managers", size=1000, color = "#0a2357" ))
-    nodes.append( Node(id="shareholders", label="Shareholders", size=1000, color = "#0a2357"))
-    edges.append( Edge(source=firm, label="", target="competitors", type="STRAIGHT"))
-    edges.append( Edge(source=firm, label="", target="shareholders", type="STRAIGHT"))
-    #edges.append( Edge(source=firm, label="", target="managers", type="STRAIGHT"))
-
-    #similar firms
-    for i in range(0,len(similar_firms)):
-        idx = similar_firms.index[i].split()[:3]
-        nodes.append( Node(id=str(idx),
-                        label=idx,
-                        size=800,
-                        color="#5c8bed")
-                        )
-        edges.append( Edge(source=str(idx), 
-            label="", 
-            target="competitors", 
-            type="STRAIGHT") 
-            )
-    #shareholders
-
-    if json_dict['GUO_NAME']:
-        for i in range(len(json_dict['GUO_NAME'])):
-            name = json_dict['GUO_NAME'][i]
-            try:
-                pct = "{:.0%}".format(float(json_dict['GUO_DIRECT_PCT'][i])/100)
-            except:
-                pct = None
-                
-            nodes.append( Node(id=str(name),
-            label=name,
-            size=800,
-            color="#fc0349")
-            ) 
-            edges.append( Edge(source=str(name), 
-            label=pct, 
-            target="shareholders" )
-            )       
-    if json_dict['DUO_NAME']:
-        for i in range(len(json_dict['DUO_NAME'])):
-            name = json_dict['DUO_NAME'][i]
-            try:
-                
-                pct = "{:.0%}".format(float(json_dict['DUO_DIRECT_PCT'][i])/100)
-            except:
-                pct = None
-            nodes.append( Node(id=str(name),
-            label=name,
-            size=800,
-            color="#fc0349")
-            )
-            edges.append( Edge(source=str(name), 
-            label=pct, 
-            target="shareholders" )
-            )
-    if json_dict['ISH_NAME']:
-        for i in range(len(json_dict['ISH_NAME'])):
-            name = json_dict['ISH_NAME'][i]
-            try:
-
-                pct = "{:.0%}".format(float(json_dict['ISH_DIRECT_PCT'][i])/100)
-            except:
-                pct = None
-            nodes.append( Node(id=str(name),
-            label=name,
-            size=800,
-            color="#fc0349")
-            )
-            edges.append( Edge(source=str(name), 
-            label=pct, 
-            target="shareholders" )
-            )
 
 
 
 
-    config = Config(width=1000, 
-                    height=400, 
-                    directed=False,
-                    nodeHighlightBehavior=True, 
-                    highlightColor="#778ebd", # or "blue"
-                    collapsible=True,
-                    node={'labelProperty':'label'},
-                    link={'labelProperty': 'label', 'renderLabel': True}
-                    # **kwargs e.g. node_size=1000 or node_color="blue"
-                    ) 
 
-    return_value = agraph(nodes=nodes, 
-                        edges=edges, 
-                        config=config)
 
-    return return_value
+
+
+
+
     
 
 
@@ -912,96 +285,7 @@ def create_tagbox(tag_state,data):
     return selected_options
 
 
-def json_to_df(json_dict):
-    data = []
-    def employee_range(employee_num):
-        if employee_num <= 49:
-            return '1-49'
-        elif employee_num <= 99:
-            return '50-99'
-        elif employee_num <= 249:
-            return '100-249'
-        elif employee_num <= 499:
-            return '250-499'
-        elif employee_num <= 999:
-            return '500-999'
-        elif employee_num <= 1999:
-            return '1000-1999'
-        else:
-            return '2000+'   
-    keys = [
-        'Name','Website','LEI','National ID','Sector Code','Sector description','Activity','Founded in','Employees','Address','Lat','Lon','Zip Code','City','Country',
-            'Management','Shareholders']
-    data.append(json_dict['NAME'].title())
-    if json_dict['WEBSITE']:
-        data.append('https://' + json_dict['WEBSITE'][0])
-    else: 
-        data.append('-')
-    data.append(json_dict['LEI'])
-    if json_dict['NATIONAL_ID']:
-        data.append(json_dict['NATIONAL_ID'][0]+' ('+json_dict['NATIONAL_ID_LABEL'][0] +')')
-    else:
-        data.append('No national ID available')
-    data.append(json_dict['NACE2_CORE_CODE'])
-    data.append(json_dict['NACE2_CORE_LABEL'])
-    data.append('\n '.join(filter(None, [json_dict['TRADE_DESCRIPTION_EN'],json_dict['PRODUCTS_SERVICES']])))
-    date = json_dict['INCORPORATION_DATE']
-    if date:
-        data.append(datetime.datetime.strptime(date, '%Y-%m-%dT%H:%M:%S').year)
-    else:
-        data.append(1900)
-    if json_dict['Years']['LY']['EMPL']:
-        data.append(employee_range(json_dict['Years']['LY']['EMPL']))
-    else:
-        data.append('1-49')
-    data.append(','.join(filter(None, [json_dict['ADDRESS_LINE1'],json_dict['ADDRESS_LINE2']])))
-    data.append(json_dict['LATITUDE'])
-    data.append(json_dict['LONGITUDE'])
-    data.append(json_dict['POSTCODE'])
-    data.append(json_dict['CITY'])
-    data.append(json_dict['COUNTRY'])
-    try:
-        data.append(json_dict['CPYCONTACTS_HEADER_FullNameOriginalLanguagePreferred'][0] + ': ' + json_dict['CPYCONTACTS_MEMBERSHIP_Function'][0].title())
-    except Exception:
-        data.append('No Management Data available on Orbis')
-    
-    if json_dict['CSH_NAME'] is not None:
-        shareholder_list = []
-        
-        for i in range(len(json_dict['CSH_NAME'])):
-            try:
-                shareholder_list.append(json_dict['CSH_NAME'][i].title() + ': ' + "{:.0%}".format(float(json_dict['CSH_TOTAL_PCT'][i])/100))
-            except ValueError:
-                shareholder_list.append(json_dict['CSH_NAME'][i].title() + ': ' + '-')
-        data.append( ", ". join(shareholder_list))
-    else:
-        data.append('No Shareholder Data available on Orbis')
-    
 
-    if json_dict['Years']:
-        keys.extend(['Year Financials','Turnover','Net Income','EBITDA','Cash Flow','Debt'])
-        data.append(json_dict['Years']['LY']['FISCAL_YEAR'][0:4])
-        data.append(json_dict['Years']['LY']['OPRE'])
-        data.append(json_dict['Years']['LY']['PL'])
-        data.append(json_dict['Years']['LY']['EBTA'])
-        data.append(json_dict['Years']['LY']['CF'])
-        data.append(json_dict['Years']['LY']['LTDB'])
-    df = pd.DataFrame(data).transpose()
-    df.columns = keys
-    return df
-
-@st.cache
-def get_main_df(json_dicts):
-    data = []
-    for json_dict in json_dicts[0]:
-        columns = json_to_df(json_dict).columns
-        listed = json_to_df(json_dict).values.tolist()
-        data.extend(listed)
-    df = pd.DataFrame(data, columns = columns)
-
-    if 'Tags' not in df:
-        df['Tags'] = 'No Tag'
-    return df
 
 @st.cache(show_spinner=False)
 def plot_wordcloud(topic,data):
@@ -1033,185 +317,7 @@ def plot_wordcloud(topic,data):
         wordcloud = WordCloud(stopwords=set(final_stopwords_list),background_color='white',height=350, font_path='arial', colormap = 'Set2').generate(text)
 
         return wordcloud.to_array()
-
-def fill_slide(client,json_dicts, slide):
-        client_dict = json_dicts.loc[client][0]
-
-        #get placeholders to write in
-        a,b,c,d,e,f,shareholders,activity,description,g, m_and_a,financials,h,management, name = slide.placeholders
-        name.text = client
-    
-
-        #get the data from json
-        try:
-            national_id = str(client_dict['NATIONAL_ID'][0]+' ('+client_dict['NATIONAL_ID_LABEL'][0] +')') if client_dict['NATIONAL_ID'] is not None else '-'
-        except:
-            national_id = '-'
-        sector = str(client_dict['NACE2_CORE_LABEL']) + ' (' +str(client_dict['NACE2_CORE_CODE']) + ')'
-        address =  ','.join(filter(None, [client_dict['ADDRESS_LINE1'],client_dict['ADDRESS_LINE2']])) + ', ' + client_dict['POSTCODE'] + ', ' + client_dict['CITY']
-        try:
-            creation_date = datetime.datetime.strptime(client_dict['INCORPORATION_DATE'], '%Y-%m-%dT%H:%M:%S').year
-        except:
-            creation_date = '-'
-        if client_dict['Years']:
-            employees = int(client_dict['Years']['LY']['EMPL']) if client_dict['Years']['LY']['EMPL'] is not None else '-'
-            turnover = "{:.0f} M€".format(client_dict['Years']['LY']['OPRE']/1e6) if client_dict['Years']['LY']['OPRE'] is not None else '-'
-            ebitda = "{:.0f} M€".format(client_dict['Years']['LY']['EBTA']/1e6) if client_dict['Years']['LY']['EBTA'] is not None else '-'
-            net_income = "{:.0f} M€".format(client_dict['Years']['LY']['PL']/1e6) if client_dict['Years']['LY']['PL'] is not None else '-'
-            year_financials = str(client_dict['Years']['LY']['FISCAL_YEAR'][0:4]) if client_dict['Years']['LY']['FISCAL_YEAR'] is not None else '-'
-        
-        #first value in list to get the "head" manager
-        manager_string = client_dict['CPYCONTACTS_HEADER_FullNameOriginalLanguagePreferred'][0] + ': '+ client_dict['CPYCONTACTS_MEMBERSHIP_Function'][0] \
-        if client_dict['CPYCONTACTS_HEADER_FullNameOriginalLanguagePreferred'] is not None else 'No Management Data available'
-
-        # write it in placeholders
-        activity.text = f'Nation ID: {national_id}\nSector: {sector}\nAddress: {address}\nCreation: {creation_date}\nEmployees: {employees}'
-        description.text = '\n '.join(filter(None, [client_dict['TRADE_DESCRIPTION_EN'],client_dict['PRODUCTS_SERVICES']]))
-        financials.text = f'Year Financials: {year_financials}\nTurnover: {turnover}\nEBITDA: {ebitda}\nNet Income: {net_income} '
-        management.text =  manager_string
-        
-        #special case for shareholders, iterate and write directly
-        shareholder_list = []
-        try:
-            for i in range(len(client_dict['CSH_NAME'])):
-                try:
-                    shareholder_string = client_dict['CSH_NAME'][i].title() + ': ' + "{:.0%}".format(float(client_dict['CSH_TOTAL_PCT'][i])/100)
-                    shareholder_list.append(shareholder_string)
-                except ValueError:
-                    shareholder_string = client_dict['CSH_NAME'][i].title() + ': ' + "-"
-                    shareholder_list.append(shareholder_string)
-
-                joined_shareholders= "\n ". join(shareholder_list)
-                shareholders.text = joined_shareholders
-        except Exception:
-            shareholders.text = 'No Shareholders data'
-
-
-
-
-
-def create_ppt(clients,json_dicts):
-    """creates a formatted ppt from a list of clients 
-
-    Args:
-        clients ([string]): client list
-        json_dicts ([json]): master pickle containing jsons for all firms
-
-    Returns:
-        [pptx object]: [ppt presentation]
-    """
-    
-    # Creating Object
-    ppt = Presentation('streamlit_app/template_ppt.pptx') 
-    
-    for client1, client2 in zip(*[iter(clients)]*2):
-
-        client_dict1 = json_dicts.loc[client1][0]
-        client_dict2 = json_dicts.loc[client2][0]
-        title_slidelayout = ppt.slide_master.slide_layouts[1]
-        slide = ppt.slides.add_slide(title_slidelayout)
-        #get placeholders to write in
-        a,b,c,d,e,f,shareholders1,activity1,description1,g, m_and_a1,financials1,h,management1,i,j,k,l,m,shareholders2,activity2,description2,n, m_and_a2,financials2,o,management2,name1, name2 = slide.placeholders
-        name1.text = client1
-        name2.text = client2
-
-         #get the data from json
-        try:
-            national_id = str(client_dict1['NATIONAL_ID'][0]+' ('+client_dict1['NATIONAL_ID_LABEL'][0] +')') 
-        except:
-            national_id = '-'
-        sector = str(client_dict1['NACE2_CORE_LABEL']) + ' (' +str(client_dict1['NACE2_CORE_CODE']) + ')'
-        address =  ','.join(filter(None, [client_dict1['ADDRESS_LINE1'],client_dict1['ADDRESS_LINE2']]))  + ', ' + client_dict1['POSTCODE'] + ', ' + client_dict1['CITY']
-        try:
-            creation_date = datetime.datetime.strptime(client_dict1['INCORPORATION_DATE'], '%Y-%m-%dT%H:%M:%S').year
-        except:
-            creation_date = '-'
-        if client_dict1['Years']:
-            employees = int(client_dict1['Years']['LY']['EMPL']) if client_dict1['Years']['LY']['EMPL'] is not None else '-'
-            turnover = "{:.0f} M€".format(client_dict1['Years']['LY']['OPRE']/1e6) if client_dict1['Years']['LY']['OPRE'] is not None else '-'
-            ebitda = "{:.0f} M€".format(client_dict1['Years']['LY']['EBTA']/1e6) if client_dict1['Years']['LY']['EBTA'] is not None else '-'
-            net_income = "{:.0f} M€".format(client_dict1['Years']['LY']['PL']/1e6) if client_dict1['Years']['LY']['PL'] is not None else '-'
-            year_financials = str(client_dict1['Years']['LY']['FISCAL_YEAR'][0:4]) if client_dict1['Years']['LY']['FISCAL_YEAR'] is not None else '-'
-        
-        #first value in list to get the "head" manager
-        manager_string = client_dict1['CPYCONTACTS_HEADER_FullNameOriginalLanguagePreferred'][0] + ': '+ client_dict1['CPYCONTACTS_MEMBERSHIP_Function'][0] \
-        if client_dict1['CPYCONTACTS_HEADER_FullNameOriginalLanguagePreferred'] is not None else 'No Management Data available'
-
-        # write it in placeholders
-        activity1.text = f'Nation ID: {national_id}\nSector: {sector}\nAddress: {address}\nCreation: {creation_date}\nEmployees: {employees}'
-        description1.text = '\n '.join(filter(None, [client_dict1['TRADE_DESCRIPTION_EN'],client_dict1['PRODUCTS_SERVICES']]))
-        financials1.text = f'Year Financials: {year_financials}\nTurnover: {turnover}\nEBITDA: {ebitda}\nNet Income: {net_income} '
-        management1.text =  manager_string
-        
-        #special case for shareholders, iterate and write directly
-        shareholder_list = []
-        try:
-            for i in range(len(client_dict2['CSH_NAME'])):
-                try:
-                    shareholder_string = client_dict2['CSH_NAME'][i].title() + ': ' + "{:.0%}".format(float(client_dict2['CSH_TOTAL_PCT'][i])/100)
-                    shareholder_list.append(shareholder_string)
-                except ValueError:
-                    shareholder_string = client_dict2['CSH_NAME'][i].title() + ': ' + "-"
-                    shareholder_list.append(shareholder_string)
-
-                joined_shareholders= "\n ". join(shareholder_list)
-                shareholders1.text = joined_shareholders
-        except Exception:
-            shareholders1.text = 'No Shareholders data'
-
-
-        #get the data from json2
-        try:
-            national_id = str(client_dict2['NATIONAL_ID'][0]+' ('+client_dict2['NATIONAL_ID_LABEL'][0] +')')
-        except:
-            national_id = '-'
-        sector = str(client_dict2['NACE2_CORE_LABEL']) + ' (' +str(client_dict2['NACE2_CORE_CODE']) + ')'
-        address =  ','.join(filter(None, [client_dict2['ADDRESS_LINE1'],client_dict2['ADDRESS_LINE2']])) + ', ' + client_dict2['POSTCODE'] + ', ' + client_dict2['CITY']
-        try:
-            creation_date = datetime.datetime.strptime(client_dict2['INCORPORATION_DATE'], '%Y-%m-%dT%H:%M:%S').year
-        except:
-            creation_date='-'
-        
-        if client_dict2['Years']:
-            employees = int(client_dict2['Years']['LY']['EMPL']) if client_dict2['Years']['LY']['EMPL'] is not None else '-'
-            turnover = "{:.0f} M€".format(client_dict2['Years']['LY']['OPRE']/1e6) if client_dict2['Years']['LY']['OPRE'] is not None else '-'
-            ebitda = "{:.0f} M€".format(client_dict2['Years']['LY']['EBTA']/1e6) if client_dict2['Years']['LY']['EBTA'] is not None else '-'
-            net_income = "{:.0f} M€".format(client_dict2['Years']['LY']['PL']/1e6) if client_dict2['Years']['LY']['PL'] is not None else '-'
-            year_financials = str(client_dict2['Years']['LY']['FISCAL_YEAR'][0:4]) if client_dict2['Years']['LY']['FISCAL_YEAR'] is not None else '-'
-        
-        #first value in list to get the "head" manager
-        manager_string = client_dict2['CPYCONTACTS_HEADER_FullNameOriginalLanguagePreferred'][0] + ': '+ client_dict2['CPYCONTACTS_MEMBERSHIP_Function'][0] \
-        if client_dict2['CPYCONTACTS_HEADER_FullNameOriginalLanguagePreferred'] is not None else 'No Management Data available'
-
-        # write it in placeholders
-        activity2.text = f'Nation ID: {national_id}\nSector: {sector}\nAddress: {address}\nCreation: {creation_date}\nEmployees: {employees}'
-        description2.text = '\n '.join(filter(None, [client_dict2['TRADE_DESCRIPTION_EN'],client_dict2['PRODUCTS_SERVICES']]))
-        financials2.text = f'Year Financials: {year_financials}\nTurnover: {turnover}\nEBITDA: {ebitda}\nNet Income: {net_income} '
-        management2.text =  manager_string
-        
-        #special case for shareholders, iterate and write directly
-        shareholder_list = []
-        try:
-            for i in range(len(client_dict2['CSH_NAME'])):
-                try:
-                    shareholder_string = client_dict2['CSH_NAME'][i].title() + ': ' + "{:.0%}".format(float(client_dict2['CSH_TOTAL_PCT'][i])/100)
-                    shareholder_list.append(shareholder_string)
-                except ValueError:
-                    shareholder_string = client_dict2['CSH_NAME'][i].title() + ': ' + "-"
-                    shareholder_list.append(shareholder_string)
-
-                joined_shareholders= "\n ". join(shareholder_list)
-                shareholders2.text = joined_shareholders
-        except Exception:
-            shareholders2.text = 'No Shareholders data'
-    
-    if len(clients)%2 !=0:
-        title_slidelayout = ppt.slide_master.slide_layouts[2]
-        slide = ppt.slides.add_slide(title_slidelayout)
-        fill_slide(clients[-1],json_dicts,slide)
-
-    return ppt
-    
+  
     
 
 def color_import(val):
@@ -1456,26 +562,3 @@ def NER_news(firm,news_df,nlp):
 
     return  ents_df_persons, ents_df_orgs
 
-# Import smtplib for the actual sending function
-def send_mail(textfile, me = 'emile.esmaili@ekimetrics.com', you='emile.esmaili@ekimetrics.com' ):
-
-
-
-    # Open a plain text file for reading.  For this example, assume that
-    # the text file contains only ASCII characters.
-    # with open(textfile, 'rb') as fp:
-    #     # Create a text/plain message
-    #     msg = MIMEText(fp.read())
-
-    # me == the sender's email address
-    # you == the recipient's email address
-    msg = pd.DataFrame([])
-    msg['Subject'] = 'The contents of %s' % textfile
-    msg['From'] = me
-    msg['To'] = you
-
-    # Send the message via our own SMTP server, but don't include the
-    # envelope header.
-    s = smtplib.SMTP('localhost')
-    s.sendmail(me, [you], msg.as_string())
-    s.quit()

@@ -1,0 +1,15 @@
+[theme]
+base="light"
+primaryColor="#c77e0f"
+secondaryBackgroundColor="#f1f3f7"
+textColor="#3c3c3f"
+
+
+[global]
+showWarningOnDirectExecution = true
+
+
+
+
+
+
