@@ -58,8 +58,8 @@ with side2:
 
 page_container = st.sidebar.container()
 with page_container:
-    page = option_menu("Menu", ["Main Page", 'Budget','Sandbox'], 
-    icons=['house','zoom-in','reddit'], menu_icon="cast", default_index=0)
+    page = option_menu("Menu", ["Main Page", 'Budget','City Explorer'], 
+    icons=['house','cash','dpad'], menu_icon="cast", default_index=0)
 
 
 
