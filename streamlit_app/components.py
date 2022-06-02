@@ -128,7 +128,7 @@ class City:
 
         st.metric('News Sentiment',"{:.0%}".format(self.news['sentiment'].iloc[-1]),delta="{:,.1f}".format(100*(self.news['sentiment'].iloc[-1]-self.news['sentiment'].iloc[-2])))
         fig = px.line(self.news, x=self.news.index, y=['sentiment', 'sentimentBlob','sentimentVader'])
-        fig.update_layout(yaxis_title='Sentiment', xaxis_title=None,width=200, height=200) 
+        fig.update_layout(yaxis_title='Sentiment', xaxis_title=None,width=200, height=300) 
         fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
         st.plotly_chart(fig, use_container_width=True)
         
@@ -207,7 +207,7 @@ class City:
                 continue
         text = ' '.join(descriptions)
         #if len(text)!=0:
-        wordcloud = WordCloud(stopwords=set(final_stopwords_list),background_color='white',height=350, font_path='arial', colormap = 'Set2').generate(text)
+        wordcloud = WordCloud(stopwords=set(final_stopwords_list),background_color='white',height=350, colormap = 'Set2').generate(text)
         self.wordcloud = wordcloud.to_array()
         
         st.image(self.wordcloud)
