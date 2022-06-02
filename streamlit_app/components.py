@@ -21,6 +21,8 @@ import datetime
 import xmltodict
 from dateutil import parser
 from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
+import nltk
+nltk.download('stopwords')
 from nltk.corpus import stopwords
 from bs4 import BeautifulSoup
 from jmd_imagescraper.core import *
