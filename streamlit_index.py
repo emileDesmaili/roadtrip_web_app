@@ -39,16 +39,15 @@ with open("streamlit_app/style.css") as f:
     st.markdown('<style>{}</style>'.format(f.read()), unsafe_allow_html=True)
 
 
-left_column, center_column,center_column2,right_column = st.columns([1,3,3,1])
+left_column, center_column,right_column = st.columns([1,3,1])
 
 with left_column:
     st.info("**Demo** Project using streamlit")
 with right_column:
     st.write("##### Authors\nThis tool has been developed by [Emile D. Esmaili](https://github.com/emileDesmaili)")
 with center_column:
-    st.image("streamlit_app/assets/roadtrip_wide.jpg")
-with center_column2:
-    st.title("Road Trip Web App")
+    st.image("streamlit_app/assets/app_logo.png")
+
 
 side1, side2 = st.sidebar.columns([1,3])
 with side1:
@@ -93,7 +92,7 @@ if page == 'Main Page':
         if submitted:
             #session state variables for cities
         
-            st.session_state["cities"].append(city)
+            st.session_state["cities"].append(city.title())
             idx_start = min(len(st.session_state["cities"]),2)*-1
 
             st.session_state["last_city"] = st.session_state["cities"][idx_start] #penultimate value is the last city aka the starting point for routes
@@ -178,7 +177,6 @@ if page == 'Main Page':
         for route in st.session_state["routes"]:
             route = st.session_state[route]
             route.compute_()
-            route.get_price()
             starts.append(route.start.title())
             finishes.append(route.finish.title())
             durations.append(round(route.duration/(60*60*24),1))
@@ -193,11 +191,36 @@ if page == 'Main Page':
     aggrid_display(df_routes)
 
 if page == 'Budget':
-    prices = get_prices()
-    prices
+    pass
 
-    fig = px.line(prices)
-    st.plotly_chart(fig, x = prices.index, y = prices.columns) 
+
+if page == 'City Explorer':
+    #city page
+
+    my_city = st.sidebar.selectbox('Select City',set(st.session_state["cities"]))
+    #create a city object
+    city = City(my_city)
+    #display name and images
+    st.title(my_city.title())
+    city.display_image(5)
+    city.plot_trends()
+
+    col1,col2 = st.columns(2)
+    with col1:
+        search = my_city.replace(' ','+').replace('&','and')
+        google_news_url = f'https://news.google.com/search?for={search}&hl=en-US&gl=US&ceid=US:en'
+        #google news iframe 
+        st.markdown(f'<iframe height="500" width="700" src={google_news_url}></iframe>', unsafe_allow_html=True) 
+
+    with col2:
+
+        city.plot_news_sentiment()
+        city.plot_wordcloud()
+
+
+        
+
+
 
 
 
