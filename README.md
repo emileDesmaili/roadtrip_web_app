@@ -21,3 +21,4 @@ python -m pip install -r requirements.txt
 streamlit run streamlit_index.py
 
 ```
+- add this chrome plugin: 'https://chrome.google.com/webstore/detail/ignore-x-frame-headers/gleekbfjekiniecknbkamfmkohkpodhe/related?hl=en
