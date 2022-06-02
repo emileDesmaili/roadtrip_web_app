@@ -65,18 +65,24 @@ with page_container:
 if page == 'Main Page':
     if "durations" not in st.session_state:
         st.session_state["durations"] = []
+    if "stays" not in st.session_state:
+        st.session_state["stays"] = []
     if "cities" not in st.session_state:
         st.session_state["cities"] = []
     if "last_city" not in st.session_state:
         st.session_state["last_city"] = ''
-    if "distance" not in st.session_state:
+    if "distances" not in st.session_state:
         st.session_state["distances"] = []
-    if "stays" not in st.session_state:
-        st.session_state["stays"] = []
     if "routes" not in st.session_state:
         st.session_state["routes"] = []
     if "expenses" not in st.session_state:
         st.session_state["expenses"] = []
+    if "starts" not in st.session_state:
+        st.session_state["starts"] = []
+    if "finishes" not in st.session_state:
+        st.session_state["finishes"] = []
+    if "gas_expenses" not in st.session_state:
+        st.session_state["gas_expenses"] = []
     
     
     
@@ -87,7 +93,7 @@ if page == 'Main Page':
             city = st.text_input("City").title()
             bender = st.checkbox('I will go on a bender in this city (so help me God...)')
         with col2:
-            length = st.number_input("Length of stay",step=1)
+            stay = st.number_input("Length of stay",step=1)
             comfort = st.slider('What do you want in terms of comfort (food/hotels) during the stay?',1,3)
 
         submitted = st.form_submit_button("Add to the Roadtrip")
@@ -99,15 +105,15 @@ if page == 'Main Page':
 
             st.session_state["last_city"] = st.session_state["cities"][idx_start] #penultimate value is the last city aka the starting point for routes
             
-            st.session_state["stays"].append(length)
+            st.session_state["stays"].append(stay)
             #creation of city object
             if city not in st.session_state:
-                st.session_state[city] = City(city, length, bender, comfort)
+                st.session_state[city] = City(city, stay, bender, comfort)
                 st.session_state[city].geocode()
                 st.session_state[city].compute_expenses()
                 st.session_state["expenses"].append(st.session_state[city].expenses)
             else:
-                st.session_state[city] = City(city, length, bender, comfort)
+                st.session_state[city] = City(city, stay, bender, comfort)
                 st.session_state[city].geocode()
                 st.session_state[city].compute_expenses()
                 st.session_state["expenses"].append(st.session_state[city].expenses)
@@ -116,13 +122,13 @@ if page == 'Main Page':
             if  len(st.session_state["cities"]) !=0:
                 start = st.session_state["last_city"]
                 start = st.session_state[start]
-                tooltip_start = start.name
+                start.create_popup()
                 #creation of the session state map
                 if "m" not in st.session_state:
                     st.session_state["m"] = folium.Map(location=[start.lat, start.lon], zoom_start=4, control_scale=True,tiles="cartodbpositron")
                 # add initial marker
                     folium.Marker(
-                        [start.lat, start.lon], popup=start.name, tooltip=start.name
+                        [start.lat, start.lon], popup=start.popup, tooltip=start.name
                     ).add_to(st.session_state["m"])
 
                 # if two or more cities, route creation
@@ -130,32 +136,43 @@ if page == 'Main Page':
                     
                     start = st.session_state["last_city"]
                     start = st.session_state[start]
+                    if start not in st.session_state['starts']:
+                        st.session_state['starts'].append(start.name)
+                    start.create_popup()
                     
                     finish  = st.session_state["cities"][-1]
                     finish = st.session_state[finish]
+                    if finish not in st.session_state['finishes']:
+                        st.session_state['finishes'].append(finish.name)
+                    finish.create_popup()
                     
+                    if start.name == finish.name:
+                        #update popup to reflect changes
+                        folium.Marker(
+                        [finish.lat, finish.lon], popup=finish.popup, tooltip=finish.name
+                        ).add_to(st.session_state["m"])
+                    else:
+                        route_id = "route_id"+ str(len(st.session_state["cities"])-1)
+                        st.session_state["routes"].append(route_id)
+                        if route_id not in st.session_state:
+                            st.session_state[route_id] = Route(start.name, finish.name)
+                        
+                        st.session_state[route_id].compute_()
+                        st.session_state["durations"].append(round(st.session_state[route_id].duration/(60*60*24),1))
+                        st.session_state["distances"].append(round(st.session_state[route_id].distance/1000,1))
+                        st.session_state["gas_expenses"].append(round(st.session_state[route_id].price,1))
 
-                    route_id = "route_id"+ str(len(st.session_state["cities"])-1)
-                    st.session_state["routes"].append(route_id)
-                    if route_id not in st.session_state:
-                        st.session_state[route_id] = Route(start.name, finish.name)
-                    
-                    st.session_state[route_id].compute_()
-                    st.session_state["durations"].append(st.session_state[route_id].duration/(60*60*24))
-                    st.session_state["distances"].append(st.session_state[route_id].distance/1000)
-                    st.session_state["expenses"].append(st.session_state[route_id].price)
+                        
+                        #adding markers
+                        folium.Marker(
+                            [start.lat, start.lon], popup=start.popup, tooltip=start.name
+                        ).add_to(st.session_state["m"])
 
-                    
-                    #adding markers
-                    folium.Marker(
-                        [start.lat, start.lon], popup=start.name, tooltip=start.name
-                    ).add_to(st.session_state["m"])
+                        folium.Marker(
+                        [finish.lat, finish.lon], popup=finish.popup, tooltip=finish.name
+                        ).add_to(st.session_state["m"])
 
-                    folium.Marker(
-                    [finish.lat, finish.lon], popup=finish.name, tooltip=finish.name
-                    ).add_to(st.session_state["m"])
-
-                    folium.GeoJson(st.session_state[route_id].decoded).add_child(folium.Tooltip(st.session_state[route_id].distance_txt+st.session_state[route_id].duration_txt)).add_to(st.session_state["m"])
+                        folium.GeoJson(st.session_state[route_id].decoded).add_child(folium.Tooltip(st.session_state[route_id].distance_txt+st.session_state[route_id].duration_txt)).add_to(st.session_state["m"])
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -163,7 +180,7 @@ if page == 'Main Page':
     with col2:
         st.metric("Road Trip Distance (Kms)",round(sum(st.session_state["distances"]),1))
     with col3:
-        st.metric("Road Trip Expenses (K€)",round(sum(st.session_state["expenses"])/1000,1))
+        st.metric("Road Trip Expenses (K€)",round((sum(st.session_state["expenses"])+sum(st.session_state['gas_expenses']))/1000,1))
 
 
     # call to render Folium map in Streamlit
@@ -175,25 +192,13 @@ if page == 'Main Page':
     st.subheader ("Itineraries")
         
     
-    def itineraries_df():
-        starts = []
-        finishes = []
-        durations = []
-        distances = []
-        prices = []
-        for route in st.session_state["routes"]:
-            route = st.session_state[route]
-            route.compute_()
-            starts.append(route.start.title())
-            finishes.append(route.finish.title())
-            durations.append(round(route.duration/(60*60*24),1))
-            distances.append(round(route.distance/1000,1))
-            prices.append(round(route.price,1))
-        df = pd.DataFrame(list(zip(starts,finishes,durations,distances, prices)), columns = ['Start','Finish', 'Duration (Days)','Distance (Kms)','Gas Price (EUR)'])
-        return df
-          
-    df_routes = itineraries_df()
-    aggrid_display(df_routes)
+
+    routes_df = pd.DataFrame(list(zip(st.session_state["starts"],st.session_state["finishes"],st.session_state["durations"],
+                                st.session_state["distances"],st.session_state["gas_expenses"])),
+                                columns = ['Start','Finish', 'Duration (Days)','Distance (Kms)','Gas Price (EUR)'])
+
+    aggrid_display(routes_df)
+
 
 if page == 'Budget':
     pass
@@ -215,25 +220,29 @@ if page == 'City Explorer':
         #plot trends
         city.plot_trends()
         #plot news
+        st.write('#### News')
         search = my_city.replace(' ','+').replace('&','and')
         google_news_url = f'https://news.google.com/search?for={search}&hl=en-US&gl=US&ceid=US:en'
         #google news iframe 
         st.markdown(f'<iframe height="400" width="700" src={google_news_url}></iframe>', unsafe_allow_html=True) 
+        st.write('#### WordCloud Generator')
+        with st.form('Generate Wordcloud'):
+            location_type = st.selectbox('What type of location are you interested in?',['bars','restaurants','clubs'])
+            submitted = st.form_submit_button('Go!')
+        if submitted:
+            city.plot_wordcloud(location_type)
 
     with col2:
         #plot weather
         st.write('#### Weather')
+        weather_url = 'https://weather.com/en-US/temps/aujour/l/1a8af5b9d8971c46dd5a52547f9221e22cd895d8d8639267a87df614d0912830'
+        st.markdown(f'<iframe height="200" width="600" src={weather_url}></iframe>', unsafe_allow_html=True) 
+        
         #plot news sentiment
         city.plot_news_sentiment()
-    with st.form('Generate Wordcloud'):
-        location_type = st.selectbox('What type of location are you interested in?',['bars','restaurants','clubs'])
-        submitted = st.form_submit_button('Generate WordCloud')
-    if submitted:
-        city.plot_wordcloud(location_type)
-    
-    st.subheader("Total Expenses")
-    city.compute_expenses()
-    st.write(city.expenses)
+        st.subheader("Total Expenses")
+        city.compute_expenses()
+        st.metric(f'Total Expenses in {city.name}', city.expenses)
 
 
         

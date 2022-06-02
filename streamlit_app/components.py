@@ -126,9 +126,9 @@ class City:
 
         st.metric('News Sentiment',"{:.0%}".format(self.news['sentiment'].iloc[-1]),delta="{:,.1f}".format(100*(self.news['sentiment'].iloc[-1]-self.news['sentiment'].iloc[-2])))
         fig = px.line(self.news, x=self.news.index, y=['sentiment', 'sentimentBlob','sentimentVader'])
-        fig.update_layout(yaxis_title='Sentiment', xaxis_title='News',width=600, height=400) 
+        fig.update_layout(yaxis_title='Sentiment', xaxis_title=None,width=200, height=200) 
         fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
-        st.plotly_chart(fig, use_container_width=False)
+        st.plotly_chart(fig, use_container_width=True)
         
 
     def write_news(self,n=10):
@@ -250,15 +250,22 @@ class City:
         n_meals = self.duration * 3
         total_meal = self.comfort/2 * price_per_meal * n_meals
         price_per_night = 50
-        n_nights = min(0,self.duration-1)
+        n_nights = max(0,self.duration-1)
         total_nights = n_nights * price_per_night
         total = total_nights + total_meal + bender
         self.expenses = total
+    
+    def create_popup(self):
+        """ creates a formatted popup for Folium map using expenses, duration
+        """
+        self.compute_expenses()
+        popup_bender =  'Yes' if self.bender == 1 else 'No'
+        self.popup = self.name + '<br>' + "Duration: " + str(self.duration) + ' days' + '<br>'  + 'Bender?' + popup_bender + '<br>'+"Expenses: " + str(self.expenses) + "USD"
 
 
 
 class Route:
-    """Route eobject that is used for itineraries
+    """Route object that is used for itineraries
     """
 
     def __init__(self, start, finish):
