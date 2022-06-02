@@ -84,11 +84,13 @@ if page == 'Main Page':
     with st.form("add_city"):
         col1, col2  = st.columns(2)
         with col1:
-            city = st.text_input("City")
+            city = st.text_input("City").title()
+            bender = st.checkbox('I will go on a bender in this city (so help me God...)')
         with col2:
             length = st.number_input("Length of stay",step=1)
+            comfort = st.slider('What do you want in terms of comfort (food/hotels) during the stay?',1,3)
 
-        submitted = st.form_submit_button("Submit")
+        submitted = st.form_submit_button("Add to the Roadtrip")
         if submitted:
             #session state variables for cities
         
@@ -100,11 +102,15 @@ if page == 'Main Page':
             st.session_state["stays"].append(length)
             #creation of city object
             if city not in st.session_state:
-                st.session_state[city] = City(city, length)
+                st.session_state[city] = City(city, length, bender, comfort)
                 st.session_state[city].geocode()
+                st.session_state[city].compute_expenses()
+                st.session_state["expenses"].append(st.session_state[city].expenses)
             else:
-                st.session_state[city] = City(city, length)
+                st.session_state[city] = City(city, length, bender, comfort)
                 st.session_state[city].geocode()
+                st.session_state[city].compute_expenses()
+                st.session_state["expenses"].append(st.session_state[city].expenses)
             #create map     
             #starting city is the first
             if  len(st.session_state["cities"]) !=0:
@@ -137,6 +143,7 @@ if page == 'Main Page':
                     st.session_state[route_id].compute_()
                     st.session_state["durations"].append(st.session_state[route_id].duration/(60*60*24))
                     st.session_state["distances"].append(st.session_state[route_id].distance/1000)
+                    st.session_state["expenses"].append(st.session_state[route_id].price)
 
                     
                     #adding markers
@@ -185,8 +192,6 @@ if page == 'Main Page':
         df = pd.DataFrame(list(zip(starts,finishes,durations,distances, prices)), columns = ['Start','Finish', 'Duration (Days)','Distance (Kms)','Gas Price (EUR)'])
         return df
           
-
-
     df_routes = itineraries_df()
     aggrid_display(df_routes)
 
@@ -199,22 +204,37 @@ if page == 'City Explorer':
 
     my_city = st.sidebar.selectbox('Select City',set(st.session_state["cities"]))
     #create a city object
-    city = City(my_city)
+    city = st.session_state[my_city]
     #display name and images
     st.title(my_city.title())
     city.display_image(5)
-    city.plot_trends()
+    
 
     col1,col2 = st.columns(2)
     with col1:
+        #plot trends
+        city.plot_trends()
+        #plot news
         search = my_city.replace(' ','+').replace('&','and')
         google_news_url = f'https://news.google.com/search?for={search}&hl=en-US&gl=US&ceid=US:en'
         #google news iframe 
         st.markdown(f'<iframe height="400" width="700" src={google_news_url}></iframe>', unsafe_allow_html=True) 
 
     with col2:
+        #plot weather
+        st.write('#### Weather')
+        #plot news sentiment
         city.plot_news_sentiment()
-    city.plot_wordcloud()
+    with st.form('Generate Wordcloud'):
+        location_type = st.selectbox('What type of location are you interested in?',['bars','restaurants','clubs'])
+        submitted = st.form_submit_button('Generate WordCloud')
+    if submitted:
+        city.plot_wordcloud(location_type)
+    
+    st.subheader("Total Expenses")
+    city.compute_expenses()
+    st.write(city.expenses)
+
 
         
 

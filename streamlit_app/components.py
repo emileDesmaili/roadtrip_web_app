@@ -43,9 +43,11 @@ class City:
     """City object 
     """
 
-    def __init__(self,name,duration=0):
+    def __init__(self,name,duration=0, bender=0, comfort=1):
         self.name = name
         self.duration = duration
+        self.bender = bender
+        self.comfort = comfort
 
     
     def geocode(self):
@@ -60,7 +62,7 @@ class City:
         self.lat = lat
         self.lon = lon
     
-    def get_news(self, source='API'):
+    def get_news(self, source='RSS'):
         """method to retrieve news using RSS feed or NewsAPI
 
         Args:
@@ -71,14 +73,15 @@ class City:
             title = []
             url = []
             date = []
-            city = self.name
+            city = self.name + 'city'
             n_news = 100
             google_actu_url=f"https://news.google.com/rss/search?q={city}"
             google_actu_url = google_actu_url.replace(" ", "+")
             response = requests.get(google_actu_url)
             decoded_response = response.content.decode('utf-8')
             response_json = json.loads(json.dumps(xmltodict.parse(decoded_response)))
-            for i in range(0,n):
+            n_articles = 50
+            for i in range(0,n_articles):
                 try:
                     url.append(response_json['rss']['channel']['item'][i]['link'])
                 except (IndexError,ValueError, KeyError):
@@ -87,7 +90,9 @@ class City:
                 date.append(response_json['rss']['channel']['item'][i]['pubDate'])
             df = pd.DataFrame([date,title, url]).transpose()
             df[0] = df[0].apply(parser.parse)
-            self.news = df.set_index(df[0])
+            df.columns = ['date','content','url']
+            
+            self.news = df
 
         if source == 'API':
             newsapi = NewsApiClient(api_key='57b09c8dcd91403d98299a5b3fc6607a')
@@ -107,6 +112,8 @@ class City:
             self.news = news_df
 
     def plot_news_sentiment(self):
+        """computes and plots news sentiment using Textblob and VADER
+        """
         analyzer = SentimentIntensityAnalyzer()
         self.get_news()
        
@@ -125,7 +132,6 @@ class City:
         
 
     def write_news(self,n=10):
-        
         self.get_news(n=n)
         news_df = self.news
         st.markdown("""
@@ -145,16 +151,9 @@ class City:
                 st.markdown(string, unsafe_allow_html=True)
 
     def plot_trends(self):
-        # analyzer = SentimentIntensityAnalyzer()
-        # news_df = get_news(client, n)
-        # news_df['sentimentBlob'] = news_df[1].apply(lambda news: TextBlob(news).sentiment.polarity)
-        # news_df['sentimentVader'] = news_df[1].apply(lambda news: analyzer.polarity_scores(news)['compound'])
-        # news_df['sentiment'] = 0.5*news_df['sentimentBlob']+0.5*news_df['sentimentVader']
+        """google trends plot
+        """
 
-        # senti_fig = px.line(news_df.sort_index(), x=0, y=news_df['sentiment'])
-        # senti_fig.update_layout(yaxis_title=None, xaxis_title=None) 
-        # st.plotly_chart(senti_fig, use_container_width=False)
-    
         pytrends = TrendReq(hl='en-US', tz=360) 
         kw_list = [self.name] # list of keywords to get data 
         pytrends.build_payload(kw_list, cat=0, timeframe='today 12-m')
@@ -176,12 +175,8 @@ class City:
 
         st.plotly_chart(fig, use_container_width=True)
 
-
-
-
-
     
-    def plot_wordcloud(self):
+    def plot_wordcloud(self, location_type):
         """plots wordcloud from html h3 headers of google search
 
         Returns:
@@ -190,31 +185,31 @@ class City:
         USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:65.0) Gecko/20100101 Firefox/66.0")
         my_stops = ['City', 'News','US','USA','ville','Accueil','Home','Famous','Landmark','Attractions','Tourist','Top','Historic','Monument',
         'places','best','things','visiter','maps','landmarks','com','historical','clubs','tripadvisor','clubbing','night','nightclub','nightclubs',
-        'nightlife','night','guide','like','hotel','yelp','meilleurs']
-        topic = self.name +' best clubs'
-        final_stopwords_list = stopwords.words('english') + stopwords.words('french') + topic.split() + my_stops
+        'nightlife','night','guide','like','hotel','yelp','meilleurs','cache','www','traduire','https','france','spain','germany','united states',
+        'cette','cachetraduire','page','cocktail','']
+        topic = f'best {location_type} in' + self.name
+        final_stopwords_list = stopwords.words('english') + stopwords.words('french') + topic.split() + self.name.split() + my_stops + [self.name,self.name+'https']
         topic=topic.replace(' ','+')
         headers = {"user-agent": USER_AGENT}
         url =f"https://google.com/search?q={topic}&num=50"  
         response = requests.get(url, headers= headers)
         soup = BeautifulSoup(response.content, 'html.parser')
-        results = soup.find_all('h3')
+        results = soup.find_all('h3') #tried div 
         descriptions = []
         for result in results:
             try:
                 description = result.get_text()
-                if description != '': 
+                if (description != '')  : 
                     descriptions.append(description)
             except:
                 continue
         text = ' '.join(descriptions)
-        if len(text)!=0:
-            wordcloud = WordCloud(stopwords=set(final_stopwords_list),background_color='white',height=350, font_path='arial', colormap = 'Set2').generate(text)
-            self.wordcloud = wordcloud.to_array()
-        try:
-            st.image(self.wordcloud)
-        except:
-            st.info('No Wordcloud')
+        #if len(text)!=0:
+        wordcloud = WordCloud(stopwords=set(final_stopwords_list),background_color='white',height=350, font_path='arial', colormap = 'Set2').generate(text)
+        self.wordcloud = wordcloud.to_array()
+        
+        st.image(self.wordcloud)
+  
     
     
     def scrape_images(self, max_results=5):
@@ -225,7 +220,7 @@ class City:
         """
         duckduckgo_search('data/raw/images', self.name,self.name, max_results=max_results)
     
-    def display_image(self, max_results=10):
+    def display_image(self, max_results=5):
         """methods to display image in streamlit page
 
         Args:
@@ -247,11 +242,23 @@ class City:
             with x:
                 st.image(image_list[a], use_column_width=False, width=250)
 
+    def compute_expenses(self):
+        """computes expenses of the trip based on the user's form and the city's price index
+        """
+        bender = 100* self.bender
+        price_per_meal = 15
+        n_meals = self.duration * 3
+        total_meal = self.comfort/2 * price_per_meal * n_meals
+        price_per_night = 50
+        n_nights = min(0,self.duration-1)
+        total_nights = n_nights * price_per_night
+        total = total_nights + total_meal + bender
+        self.expenses = total
 
 
 
 class Route:
-    """Ruute eobject that is used for itineraries
+    """Route eobject that is used for itineraries
     """
 
     def __init__(self, start, finish):
@@ -321,7 +328,6 @@ def aggrid_display(df):
     """
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_grid_options(rowHeight=40)
-    gb.configure_pagination()
     gb.configure_side_bar()
     gb.configure_default_column(
                                 min_column_width =3, groupable=True, value=True, enableRowGroup=True,
@@ -332,8 +338,8 @@ def aggrid_display(df):
     # display main dataframe
     if not df.empty:
         grid_response = AgGrid(df, gridOptions=gridOptions, enable_enterprise_modules=True,
-        fit_columns_on_grid_load=False, allow_unsafe_jscode= True, data_return_mode = DataReturnMode.FILTERED_AND_SORTED, update_mode=GridUpdateMode.SELECTION_CHANGED,
-        height=300, theme="material"
+        fit_columns_on_grid_load=True, allow_unsafe_jscode= True, data_return_mode = DataReturnMode.FILTERED_AND_SORTED, update_mode=GridUpdateMode.SELECTION_CHANGED,
+        height=400, theme="material"
         )
         #df = grid_response['data']
         # selected = grid_response['selected_rows']
