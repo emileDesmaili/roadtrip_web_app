@@ -1,14 +1,14 @@
 
 ![alt text](streamlit_app/assets/app_logo.PNG)
-# roadtrip_web_app
-This web-app is developed by Emile Esmaili
+# RoadTripping Web app
 
-The goal is to map my long-awaited road-trip in the U.S. for summer 2022 
+This streamlit webapp is inspired by my long-awaited road-trip in the U.S. for summer 2022 
 
 # Some features include:
 - interactive map with estimation of driving time, distance & gas cost
-- TODO: city by city zoom with news, weather, & average cost per stay 
+- city by city zoom with images, news, weather, & average cost per stay 
 - TODO: city recommenders system?
+- TODO: GAN to generate iamge from all city images? 
 
 # To run the app
 - clone the repo
