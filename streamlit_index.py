@@ -46,7 +46,7 @@ with left_column:
 with right_column:
     st.write("##### Authors\nThis tool has been developed by [Emile D. Esmaili](https://github.com/emileDesmaili)")
 with center_column:
-    st.image("streamlit_app/assets/app_logo.png")
+    st.image("streamlit_app/assets/app_logo.PNG")
 
 
 side1, side2 = st.sidebar.columns([1,3])
