@@ -210,12 +210,13 @@ if page == 'City Explorer':
         search = my_city.replace(' ','+').replace('&','and')
         google_news_url = f'https://news.google.com/search?for={search}&hl=en-US&gl=US&ceid=US:en'
         #google news iframe 
-        st.markdown(f'<iframe height="500" width="700" src={google_news_url}></iframe>', unsafe_allow_html=True) 
+        st.markdown(f'<iframe height="400" width="700" src={google_news_url}></iframe>', unsafe_allow_html=True) 
 
     with col2:
-
         city.plot_news_sentiment()
-        city.plot_wordcloud()
+    city.plot_wordcloud()
+
+        
 
 
         

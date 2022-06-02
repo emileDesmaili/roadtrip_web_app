@@ -92,19 +92,37 @@ class City:
         if source == 'API':
             newsapi = NewsApiClient(api_key='57b09c8dcd91403d98299a5b3fc6607a')
             all_articles = newsapi.get_everything(q=self.name,
-                                                from_param=datetime.datetime.now()-datetime.timedelta(days = 10),
+                                                from_param=datetime.datetime.now()-datetime.timedelta(days = 30),
                                                 to=datetime.datetime.now(),
                                                 language='en',
                                                 sort_by='relevancy',
-                                                page=1)
+                                                page_size=100)
             desc = []
             date = []
             for article in all_articles['articles']:
                 desc.append(article['description'])
                 date.append(article['publishedAt'])
 
-            news_df = pd.DataFrame([date,desc],columns=['date','content']).sort_index(ascending=False)
+            news_df = pd.DataFrame(list(zip(date,desc)),columns=['date','content']).sort_index(ascending=False)
             self.news = news_df
+
+    def plot_news_sentiment(self):
+        analyzer = SentimentIntensityAnalyzer()
+        self.get_news()
+       
+        self.news['sentimentBlob'] = self.news['content'].apply(lambda news: TextBlob(news).sentiment.polarity)
+        self.news['sentimentVader'] = self.news['content'].apply(lambda news: analyzer.polarity_scores(news)['compound'])
+        self.news['sentiment'] = 0.5*self.news['sentimentBlob']+0.5*self.news['sentimentVader']
+        self.news['date']= pd.to_datetime(self.news['date'])
+        self.news = self.news.sort_values(by='date', ascending=True)
+        self.news = self.news.groupby(pd.Grouper(key='date',freq='D')).mean().dropna()
+
+        st.metric('News Sentiment',"{:.0%}".format(self.news['sentiment'].iloc[-1]),delta="{:,.1f}".format(100*(self.news['sentiment'].iloc[-1]-self.news['sentiment'].iloc[-2])))
+        fig = px.line(self.news, x=self.news.index, y=['sentiment', 'sentimentBlob','sentimentVader'])
+        fig.update_layout(yaxis_title='Sentiment', xaxis_title='News',width=600, height=400) 
+        fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
+        st.plotly_chart(fig, use_container_width=False)
+        
 
     def write_news(self,n=10):
         
@@ -147,7 +165,7 @@ class City:
         fig.update_traces(line=dict(width=3))
 
         fig.update_layout(yaxis_title=None, xaxis_title=None,
-        width=100, height=150) 
+        width=100, height=100) 
         fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
         fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
         st.write(f'##### Search Interest Over Time for {self.name} from Google Trends')
@@ -158,21 +176,11 @@ class City:
 
         st.plotly_chart(fig, use_container_width=True)
 
-    def plot_news_sentiment(self):
-        analyzer = SentimentIntensityAnalyzer()
-        self.get_news()
-        news_df = self.news
-        news_df['sentimentBlob'] = news_df[1].apply(lambda news: TextBlob(news).sentiment.polarity)
-        news_df['sentimentVader'] = news_df[1].apply(lambda news: analyzer.polarity_scores(news)['compound'])
-        news_df['sentiment'] = 0.5*news_df['sentimentBlob']+0.5*news_df['sentimentVader']
-
-        senti_fig = px.line(news_df.sort_index(), x=news_df.index, y=news_df['sentiment'])
-        senti_fig.update_layout(yaxis_title=None, xaxis_title=None) 
-        st.plotly_chart(senti_fig, use_container_width=False)
 
 
 
-    @st.cache()
+
+    
     def plot_wordcloud(self):
         """plots wordcloud from html h3 headers of google search
 
@@ -181,8 +189,9 @@ class City:
         """
         USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.14; rv:65.0) Gecko/20100101 Firefox/66.0")
         my_stops = ['City', 'News','US','USA','ville','Accueil','Home','Famous','Landmark','Attractions','Tourist','Top','Historic','Monument',
-        'places','best','things','visiter','maps','landmarks','com','historical']
-        topic = self.name +' monuments to see'
+        'places','best','things','visiter','maps','landmarks','com','historical','clubs','tripadvisor','clubbing','night','nightclub','nightclubs',
+        'nightlife','night','guide','like','hotel','yelp','meilleurs']
+        topic = self.name +' best clubs'
         final_stopwords_list = stopwords.words('english') + stopwords.words('french') + topic.split() + my_stops
         topic=topic.replace(' ','+')
         headers = {"user-agent": USER_AGENT}
@@ -201,7 +210,6 @@ class City:
         text = ' '.join(descriptions)
         if len(text)!=0:
             wordcloud = WordCloud(stopwords=set(final_stopwords_list),background_color='white',height=350, font_path='arial', colormap = 'Set2').generate(text)
-
             self.wordcloud = wordcloud.to_array()
         try:
             st.image(self.wordcloud)
@@ -217,7 +225,7 @@ class City:
         """
         duckduckgo_search('data/raw/images', self.name,self.name, max_results=max_results)
     
-    def display_image(self, max_results=5):
+    def display_image(self, max_results=10):
         """methods to display image in streamlit page
 
         Args:
@@ -237,7 +245,7 @@ class City:
         cols = st.columns(len(image_list))
         for a, x in enumerate(cols):
             with x:
-                st.image(image_list[a], use_column_width=False, width = 250)
+                st.image(image_list[a], use_column_width=False, width=250)
 
 
 
