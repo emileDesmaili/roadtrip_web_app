@@ -208,7 +208,7 @@ if page == 'City Explorer':
     #city page
 
     my_city = st.sidebar.selectbox('Select City',set(st.session_state["cities"]))
-    if my_city == '':
+    if my_city == None:
         st.info ('Add Cities to your trip first 😇')
     else:
         #create a city object
