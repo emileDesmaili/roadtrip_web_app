@@ -208,41 +208,44 @@ if page == 'City Explorer':
     #city page
 
     my_city = st.sidebar.selectbox('Select City',set(st.session_state["cities"]))
-    #create a city object
-    city = st.session_state[my_city]
-    #display name and images
-    st.title(my_city.title())
-    city.display_image(5)
-    
-
-    col1,col2 = st.columns(2)
-    with col1:
-        #plot trends
-        city.plot_trends()
-        #plot news
-        st.write('#### News')
-        search = my_city.replace(' ','+').replace('&','and')
-        google_news_url = f'https://news.google.com/search?for={search}&hl=en-US&gl=US&ceid=US:en'
-        #google news iframe 
-        st.markdown(f'<iframe height="400" width="700" src={google_news_url}></iframe>', unsafe_allow_html=True) 
-        st.write('#### WordCloud Generator')
-        with st.form('Generate Wordcloud'):
-            location_type = st.selectbox('What type of location are you interested in?',['bars','restaurants','clubs'])
-            submitted = st.form_submit_button('Go!')
-        if submitted:
-            city.plot_wordcloud(location_type)
-
-    with col2:
-        #plot weather
-        st.write('#### Weather')
-        weather_url = 'https://weather.com/en-US/temps/aujour/l/1a8af5b9d8971c46dd5a52547f9221e22cd895d8d8639267a87df614d0912830'
-        st.markdown(f'<iframe height="200" width="600" src={weather_url}></iframe>', unsafe_allow_html=True) 
+    if my_city == '':
+        st.info ('Add Cities to your trip first 😇')
+    else:
+        #create a city object
+        city = st.session_state[my_city]
+        #display name and images
+        st.title(my_city.title())
+        city.display_image(5)
         
-        #plot news sentiment
-        city.plot_news_sentiment()
-        st.subheader("Total Expenses")
-        city.compute_expenses()
-        st.metric(f'Total Expenses in {city.name}', city.expenses)
+
+        col1,col2 = st.columns(2)
+        with col1:
+            #plot trends
+            city.plot_trends()
+            #plot news
+            st.write('#### News')
+            search = my_city.replace(' ','+').replace('&','and')
+            google_news_url = f'https://news.google.com/search?for={search}&hl=en-US&gl=US&ceid=US:en'
+            #google news iframe 
+            st.markdown(f'<iframe height="400" width="700" src={google_news_url}></iframe>', unsafe_allow_html=True) 
+            st.write('#### WordCloud Generator')
+            with st.form('Generate Wordcloud'):
+                location_type = st.selectbox('What type of location are you interested in?',['bars','restaurants','clubs'])
+                submitted = st.form_submit_button('Go!')
+            if submitted:
+                city.plot_wordcloud(location_type)
+
+        with col2:
+            #plot weather
+            st.write('#### Weather')
+            weather_url = 'https://weather.com/en-US/temps/aujour/l/1a8af5b9d8971c46dd5a52547f9221e22cd895d8d8639267a87df614d0912830'
+            st.markdown(f'<iframe height="200" width="600" src={weather_url}></iframe>', unsafe_allow_html=True) 
+            
+            #plot news sentiment
+            city.plot_news_sentiment()
+            st.subheader("Total Expenses")
+            city.compute_expenses()
+            st.metric(f'Total Expenses in {city.name}', city.expenses)
 
 
         
