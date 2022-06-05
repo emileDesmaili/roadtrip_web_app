@@ -35,7 +35,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from newsapi.newsapi_client import NewsApiClient
+from newsapi_client import NewsApiClient
 import python_weather
 import asyncio
 
