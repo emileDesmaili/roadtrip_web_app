@@ -271,22 +271,31 @@ class City:
     async def get_weather(self):
         """asynchronous method to generate weather & forecasts
         """
-
         # declare the client. format defaults to metric system (celcius, km/h, etc.)
-        client = python_weather.Client(format=python_weather.IMPERIAL)
-
+        client = python_weather.Client(format=python_weather.METRIC)
         # fetch a weather forecast from a city
         weather = await client.find(self.name)
-
         # returns the current day's forecast temperature (int)
-        self.current_weather = weather.current.temperature
+        emoji_dict = dict(zip(['Sunny','Cloudy','Light Rain','Partly Sunny','Mostly Cloudy'],['☀️','☁️','🌧️','🌤️','🌥️']))
+        text = weather.current.sky_text
+        try:
+            emoji = emoji_dict[text]
+        except KeyError:
+            emoji = '🌦️'
+        self.current_weather = str(weather.current.temperature) + '°C' + str(emoji)
+
         st.metric('Current Weather', self.current_weather)
         self.weather_forecasts = weather.forecasts
-
         # get the weather forecast for a few days
-        for forecast in weather.forecasts:
-
-            st.write(str(forecast.date), forecast.sky_text, forecast.temperature)
+        for forecast in weather.forecasts[2:]:
+            temperature = str(forecast.temperature) + '°C'
+            date = forecast.date.strftime("%d/%m/%Y")
+            text = forecast.sky_text
+            try:
+                emoji = str(emoji_dict[text])
+            except KeyError:
+                emoji = '🌦️'
+            st.write('Forecast for ',date,' - ', temperature, emoji )
 
         # close the wrapper once done
         await client.close()

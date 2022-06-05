@@ -237,13 +237,10 @@ if page == 'City Explorer':
 
         with col2:
             #plot weather
-            st.write('#### Weather')
             asyncio.run(city.get_weather())
-            st.write(city.current_weather)
-
             
             #plot news sentiment
-            source = st.radio('source',('API','RSS'))
+            source = st.radio('News source',('RSS','API'))
             city.plot_news_sentiment(source)
             st.subheader("Total Expenses")
             city.compute_expenses()
