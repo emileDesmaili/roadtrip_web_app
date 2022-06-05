@@ -12,8 +12,8 @@ from streamlit_app.components import City, Route, aggrid_display, get_prices
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode,JsCode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import asyncio
+
 
 
 
@@ -238,11 +238,13 @@ if page == 'City Explorer':
         with col2:
             #plot weather
             st.write('#### Weather')
-            weather_url = 'https://weather.com/en-US/temps/aujour/l/1a8af5b9d8971c46dd5a52547f9221e22cd895d8d8639267a87df614d0912830'
-            st.markdown(f'<iframe height="200" width="600" src={weather_url}></iframe>', unsafe_allow_html=True) 
+            asyncio.run(city.get_weather())
+            st.write(city.current_weather)
+
             
             #plot news sentiment
-            city.plot_news_sentiment()
+            source = st.radio('source',('API','RSS'))
+            city.plot_news_sentiment(source)
             st.subheader("Total Expenses")
             city.compute_expenses()
             st.metric(f'Total Expenses in {city.name}', city.expenses)

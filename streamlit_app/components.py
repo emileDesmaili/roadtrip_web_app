@@ -36,6 +36,10 @@ import plotly.graph_objects as go
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from newsapi import NewsApiClient
+import python_weather
+import asyncio
+
+
 
 
 
@@ -64,7 +68,7 @@ class City:
         self.lat = lat
         self.lon = lon
     
-    def get_news(self, source='RSS'):
+    def get_news(self, source):
         """method to retrieve news using RSS feed or NewsAPI
 
         Args:
@@ -113,11 +117,11 @@ class City:
             news_df = pd.DataFrame(list(zip(date,desc)),columns=['date','content']).sort_index(ascending=False)
             self.news = news_df
 
-    def plot_news_sentiment(self):
+    def plot_news_sentiment(self, source):
         """computes and plots news sentiment using Textblob and VADER
         """
         analyzer = SentimentIntensityAnalyzer()
-        self.get_news()
+        self.get_news(source)
        
         self.news['sentimentBlob'] = self.news['content'].apply(lambda news: TextBlob(news).sentiment.polarity)
         self.news['sentimentVader'] = self.news['content'].apply(lambda news: analyzer.polarity_scores(news)['compound'])
@@ -263,6 +267,30 @@ class City:
         self.compute_expenses()
         popup_bender =  'Yes' if self.bender == 1 else 'No'
         self.popup = self.name + '<br>' + "Duration: " + str(self.duration) + ' days' + '<br>'  + 'Bender?' + popup_bender + '<br>'+"Expenses: " + str(self.expenses) + "USD"
+    
+    async def get_weather(self):
+        """asynchronous method to generate weather & forecasts
+        """
+
+        # declare the client. format defaults to metric system (celcius, km/h, etc.)
+        client = python_weather.Client(format=python_weather.IMPERIAL)
+
+        # fetch a weather forecast from a city
+        weather = await client.find(self.name)
+
+        # returns the current day's forecast temperature (int)
+        self.current_weather = weather.current.temperature
+        st.metric('Current Weather', self.current_weather)
+        self.weather_forecasts = weather.forecasts
+
+        # get the weather forecast for a few days
+        for forecast in weather.forecasts:
+
+            st.write(str(forecast.date), forecast.sky_text, forecast.temperature)
+
+        # close the wrapper once done
+        await client.close()
+
 
 
 
