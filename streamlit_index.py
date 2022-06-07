@@ -255,7 +255,7 @@ if page == 'Budget':
                     tot_expenses= st.session_state['tot_expenses']    
                         )
     budget = st.number_input('What is your budget?')
-    if st.session_state['cities'] == '':
+    if st.session_state['cities'] == []:
         st.info('Add Cities to your trip first 😇')
     else:
         try:
