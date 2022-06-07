@@ -8,11 +8,12 @@ from streamlit_option_menu import option_menu
 from streamlit import components
 from streamlit_folium import folium_static
 import folium
-from streamlit_app.components import City, Route, aggrid_display, get_prices
+from streamlit_app.components import City, Route, aggrid_display, get_prices, make_expense_ts, plot_expenses
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode,JsCode
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 import plotly.express as px
 import asyncio
+import numpy as np
 
 
 
@@ -57,7 +58,7 @@ with side2:
 
 page_container = st.sidebar.container()
 with page_container:
-    page = option_menu("Menu", ["Main Page", 'Budget','City Explorer'], 
+    page = option_menu("Menu", ["Main Page", 'City Explorer','Budget'], 
     icons=['house','cash','dpad'], menu_icon="cast", default_index=0)
 
 
@@ -83,6 +84,10 @@ if page == 'Main Page':
         st.session_state["finishes"] = []
     if "gas_expenses" not in st.session_state:
         st.session_state["gas_expenses"] = []
+    if "days_ts" not in st.session_state:
+        st.session_state["days_ts"] = []
+    if "tot_expenses" not in st.session_state:
+        st.session_state["tot_expenses"] = []
     
     
     
@@ -91,27 +96,28 @@ if page == 'Main Page':
         col1, col2  = st.columns(2)
         with col1:
             city = st.text_input("City").title()
-            bender = st.checkbox('I will go on a bender in this city (so help me God...)')
+            bender = st.slider('How many nights will you go on a bender?',0,10)
         with col2:
-            stay = st.number_input("Length of stay",step=1)
+            stay = st.number_input("Length of stay",1,10,step=1)
             comfort = st.slider('What do you want in terms of comfort (food/hotels) during the stay?',1,3)
 
         submitted = st.form_submit_button("Add to the Roadtrip")
         if submitted:
             #session state variables for cities
-        
-            st.session_state["cities"].append(city.title())
-            idx_start = min(len(st.session_state["cities"]),2)*-1
-
-            st.session_state["last_city"] = st.session_state["cities"][idx_start] #penultimate value is the last city aka the starting point for routes
             
-            st.session_state["stays"].append(stay)
+            
             #creation of city object
             if city not in st.session_state:
+                st.session_state["cities"].append(city.title())
+                idx_start = min(len(st.session_state["cities"]),2)*-1
+                st.session_state["last_city"] = st.session_state["cities"][idx_start] #penultimate value is the last city aka the starting point for routes
+                st.session_state["stays"].append(stay)
+                st.session_state["days_ts"].append((stay))
                 st.session_state[city] = City(city, stay, bender, comfort)
                 st.session_state[city].geocode()
                 st.session_state[city].compute_expenses()
                 st.session_state["expenses"].append(st.session_state[city].expenses)
+                st.session_state["tot_expenses"].append(st.session_state[city].expenses)
             else:
                 st.session_state[city] = City(city, stay, bender, comfort)
                 st.session_state[city].geocode()
@@ -159,8 +165,10 @@ if page == 'Main Page':
                         
                         st.session_state[route_id].compute_()
                         st.session_state["durations"].append(round(st.session_state[route_id].duration/(60*60*24),1))
+                        st.session_state["days_ts"].insert(-1,round(st.session_state[route_id].duration/(60*60*24),1))
                         st.session_state["distances"].append(round(st.session_state[route_id].distance/1000,1))
                         st.session_state["gas_expenses"].append(round(st.session_state[route_id].price,1))
+                        st.session_state["tot_expenses"].insert(-1,round(st.session_state[route_id].price,1))
 
                         
                         #adding markers
@@ -176,7 +184,7 @@ if page == 'Main Page':
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Road Trip Duration (Days)",round(sum(st.session_state["durations"])/(60*60*24)+sum(st.session_state["stays"]),1))
+        st.metric("Road Trip Duration (Days)",round(sum(st.session_state["durations"])+sum(st.session_state["stays"]),1))
     with col2:
         st.metric("Road Trip Distance (Kms)",round(sum(st.session_state["distances"]),1))
     with col3:
@@ -200,13 +208,9 @@ if page == 'Main Page':
     aggrid_display(routes_df)
 
 
-if page == 'Budget':
-    pass
-
-
 if page == 'City Explorer':
+    st.info('Please install [this Chrome add-in](https://chrome.google.com/webstore/detail/ignore-x-frame-headers/gleekbfjekiniecknbkamfmkohkpodhe/related?hl=en) ')
     #city page
-
     my_city = st.sidebar.selectbox('Select City',set(st.session_state["cities"]))
     if my_city == None:
         st.info ('Add Cities to your trip first 😇')
@@ -244,8 +248,16 @@ if page == 'City Explorer':
             city.plot_news_sentiment(source)
             st.subheader("Total Expenses")
             city.compute_expenses()
-            st.metric(f'Total Expenses in {city.name}', city.expenses)
+            st.metric(f'Total Expenses in {city.name}', str(round(city.expenses))+ ' €')
 
+if page == 'Budget':
+    df = make_expense_ts(days_ts=st.session_state['days_ts'], 
+                    tot_expenses= st.session_state['tot_expenses']    
+                        )
+    budget = st.number_input('What is your budget?')
+    plot_expenses(df, budget,st.session_state['gas_expenses'],st.session_state['expenses'])
+
+    
 
         
 

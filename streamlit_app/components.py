@@ -38,8 +38,10 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from newsapi import NewsApiClient
 import python_weather
 import asyncio
-
-
+import numpy as np
+import plotly.graph_objects as go
+from folium import IFrame 
+import base64
 
 
 
@@ -192,7 +194,7 @@ class City:
         my_stops = ['City', 'News','US','USA','ville','Accueil','Home','Famous','Landmark','Attractions','Tourist','Top','Historic','Monument',
         'places','best','things','visiter','maps','landmarks','com','historical','clubs','tripadvisor','clubbing','night','nightclub','nightclubs',
         'nightlife','night','guide','like','hotel','yelp','meilleurs','cache','www','traduire','https','france','spain','germany','united states',
-        'cette','cachetraduire','page','cocktail','']
+        'cette','cachetraduire','page','cocktail','','travel','eat','food','dining']
         topic = f'best {location_type} in' + self.name
         final_stopwords_list = stopwords.words('english') + stopwords.words('french') + topic.split() + self.name.split() + my_stops + [self.name,self.name+'https']
         topic=topic.replace(' ','+')
@@ -246,7 +248,7 @@ class City:
         cols = st.columns(len(image_list))
         for a, x in enumerate(cols):
             with x:
-                st.image(image_list[a], use_column_width=False, width=250)
+                st.image(image_list[a], use_column_width=False, width=250, channels='BGR')
 
     def compute_expenses(self):
         """computes expenses of the trip based on the user's form and the city's price index
@@ -265,8 +267,17 @@ class City:
         """ creates a formatted popup for Folium map using expenses, duration
         """
         self.compute_expenses()
-        popup_bender =  'Yes' if self.bender == 1 else 'No'
-        self.popup = self.name + '<br>' + "Duration: " + str(self.duration) + ' days' + '<br>'  + 'Bender?' + popup_bender + '<br>'+"Expenses: " + str(self.expenses) + "USD"
+
+        popup_string = '<strong>' + self.name + '</strong>' + '<br>' + "Duration: " + str(self.duration) + ' days' + '<br>'  + 'Benders: ' + str(self.bender) + '<br>'+"Expenses: " + str(self.expenses) + "EUR"
+        path = 'data/raw/images/'+self.name+'/'
+        path = path+os.listdir(path)[0]
+        encoded = base64.b64encode(open(path, 'rb').read())
+        html = popup_string+'<img src="data:image/jpg;base64,{}"><br>'
+        html = html.format
+        iframe = IFrame(html(encoded.decode('UTF-8')), width=200, height=400)
+        popup = folium.Popup(iframe, max_width=600)
+        self.popup=popup
+
     
     async def get_weather(self):
         """asynchronous method to generate weather & forecasts
@@ -299,6 +310,8 @@ class City:
 
         # close the wrapper once done
         await client.close()
+    
+
 
 
 
@@ -342,11 +355,107 @@ class Route:
 
     
     
+######## regular functions
+def make_expense_ts(days_ts, tot_expenses):
+    """this function is a messy way to turn lists of trip durations & stays & expenses into a time series dataframe
 
+    Args:
+        days_ts (list): session state of days
+        tot_expenses (list): session state of expenses
 
+    Returns:
+        df: dataframe of days & expenses
+    """
+    # first pass
+    df = pd.DataFrame(list(zip(days_ts,tot_expenses)),columns=['days','expenses'])
+    days = []
+    expenses = []
+    for i in range(len(df)):
+        day = df['days'].iloc[i]
+        expense = df['expenses'].iloc[i]
+        if day>1:
+            day = int(day)
+            days.extend(np.ones(day))
+            expenses.extend(np.ones(day)*expense/day)
+        elif day==1:
+            day = int(day)
+            days.append(1)
+            expenses.append(expense)
+        else:
+            days.append(day)
+            expenses.append(expense)
 
+    df = pd.DataFrame(list(zip(days,expenses)),columns=['days','expenses'])
+    # second pass
+    days = []
+    expenses = []
+    for i in range(len(df)-1):
+        day = df['days'].iloc[i]
+        expense = df['expenses'].iloc[i]
+        next_day = df['days'].iloc[i+1]
+        next_expense = df['expenses'].iloc[i+1]
+        if day <1:
+            df['days'].iloc[i] = 1
+            df['days'].iloc[i+1] = 1-day
+            df['expenses'].iloc[i] = expense + (1-day)*next_expense
+            df['expenses'].iloc[i+1] = day * next_expense
+            
+        else:
+            df['days'].iloc[i] = 1
+            df['expenses'].iloc[i] = expense
+        
+    df['days'] = df['days'].cumsum().apply(round)
+    df['cumulative expenses'] = df['expenses'].cumsum()
 
+    return df
+
+def plot_expenses(df, budget, gas_expenses, city_expenses):
+    df = df.apply(round)
+    df['over_under'] = np.where(df['cumulative expenses']<budget,'Under Budget','Over Budget')
+    pie_df = pd.DataFrame([])
     
+    index = 'days'
+    columns=['expenses','cumulative expenses']
+    tot_exp = df['expenses'].sum()
+    mean_exp = df['expenses'].mean()
+    balance = budget-tot_exp
+    
+    
+    fig = px.line(df,x=index,y=columns[1])
+    fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
+    fig.update_traces(line=dict(color="firebrick", width=4), marker_color='firebrick')
+    fig2 = px.bar(df, x=index, y=columns[0], text_auto=True, color='over_under')
+    try:
+        fig.add_trace(fig2.data[0])
+        fig.add_trace(fig2.data[1])
+    except:
+        try:
+            fig.add_trace(fig2.data[1])
+        except:
+            fig.add_trace(fig2.data[0])
+    
+    col1, col2, col3 = st.columns(3)
+    
+    #metrics
+    with col1:   
+        st.metric("Total Expenses",str(round(tot_exp)) + '€')
+    with col2:
+        st.metric("Average Spend per day",str(round(mean_exp)) + '€')
+    with col3:
+        if tot_exp> budget:
+            st.metric('You are over budget 🥵',value=str(round(balance)) + '€ down',delta=balance)
+        else:
+            st.metric('You are in line 😃',value=str(round(balance))+"€ left",delta=balance)
+    
+    #charts
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(fig)
+    with col2:
+        fig = px.pie(pie_df)
+
+     
+   
 def get_prices():
     #Alpha vantage API_KEY = 'CJGXXM6MW5QTI080'
     fred_api_key = '7294815d2a10429894fa3423865fea22'
@@ -357,13 +466,6 @@ def get_prices():
     prices_df['USD'] = fred.get_series('DTWEXBGS')
     prices_df['infla'] = fred.get_series('T5YIFR')
     return prices_df.dropna(axis=0)
-
-
-
-    
-
-
-
 
 
 def aggrid_display(df):
