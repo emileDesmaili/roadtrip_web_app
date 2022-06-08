@@ -277,10 +277,10 @@ class City:
         path = 'data/raw/images/'+self.name+'/'
         path = path+os.listdir(path)[0]
         encoded = base64.b64encode(open(path, 'rb').read())
-        html = popup_string+'<img src="data:image/jpg;base64,{}"><br>'
+        html = popup_string+'<img src="data:image/jpg; base64,{}" style="width:150px; height:100px"><br>'
         html = html.format
-        iframe = IFrame(html(encoded.decode('UTF-8')), width=200, height=400)
-        popup = folium.Popup(iframe, max_width=600)
+        iframe = IFrame(html(encoded.decode('UTF-8')), width=200, height=200)
+        popup = folium.Popup(iframe, max_width=400)
         self.popup=popup
 
     
