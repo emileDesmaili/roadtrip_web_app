@@ -131,7 +131,7 @@ if page == 'Main Page':
                 start.create_popup()
                 #creation of the session state map
                 if "m" not in st.session_state:
-                    st.session_state["m"] = folium.Map(location=[start.lat, start.lon], zoom_start=4, control_scale=True,tiles="cartodbpositron")
+                    st.session_state["m"] = folium.Map(location=[start.lat, start.lon], zoom_start=4, control_scale=True,tiles='Stamen Watercolor')
                 # add initial marker
                     folium.Marker(
                         [start.lat, start.lon], popup=start.popup, tooltip=start.name
@@ -179,6 +179,7 @@ if page == 'Main Page':
                         folium.Marker(
                         [finish.lat, finish.lon], popup=finish.popup, tooltip=finish.name
                         ).add_to(st.session_state["m"])
+                        st.session_state["m"].fit_bounds(st.session_state["m"].get_bounds(), padding=(30, 30))
 
                         folium.GeoJson(st.session_state[route_id].decoded).add_child(folium.Tooltip(st.session_state[route_id].distance_txt+st.session_state[route_id].duration_txt)).add_to(st.session_state["m"])
 
@@ -193,7 +194,7 @@ if page == 'Main Page':
 
     # call to render Folium map in Streamlit
     try:
-        folium_static(st.session_state["m"],width=1200, height=700)
+        folium_static(st.session_state["m"],width=1400, height=450)
     except KeyError:
         pass
     # display individual itineraries
