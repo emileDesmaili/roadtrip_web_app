@@ -267,7 +267,11 @@ class City:
         """ creates a formatted popup for Folium map using expenses, duration
         """
         self.compute_expenses()
-        self.scrape_images()
+        path_ = 'data/raw/images/' + self.name
+        if os.path.isdir(path_):
+            pass
+        else:
+            self.scrape_images()
 
         popup_string = '<strong>' + self.name + '</strong>' + '<br>' + "Duration: " + str(self.duration) + ' days' + '<br>'  + 'Benders: ' + str(self.bender) + '<br>'+"Expenses: " + str(self.expenses) + "EUR"
         path = 'data/raw/images/'+self.name+'/'
