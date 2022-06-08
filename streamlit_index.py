@@ -258,10 +258,8 @@ if page == 'Budget':
     if st.session_state['cities'] == []:
         st.info('Add Cities to your trip first 😇')
     else:
-        try:
-            plot_expenses(df, budget,st.session_state['gas_expenses'],st.session_state['expenses'])
-        except:
-            st.warning('Cannot display budget...')
+        plot_expenses(df, budget,st.session_state['gas_expenses'],st.session_state['expenses'])
+
 
     
 

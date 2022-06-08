@@ -256,17 +256,18 @@ class City:
         bender = 100* self.bender
         price_per_meal = 15
         n_meals = self.duration * 3
-        total_meal = self.comfort/2 * price_per_meal * n_meals
+        self.total_meal = self.comfort/2 * price_per_meal * n_meals
         price_per_night = 50
         n_nights = max(0,self.duration-1)
-        total_nights = n_nights * price_per_night
-        total = total_nights + total_meal + bender
+        self.total_nights = n_nights * price_per_night
+        total = self.total_nights + self.total_meal + bender
         self.expenses = total
     
     def create_popup(self):
         """ creates a formatted popup for Folium map using expenses, duration
         """
         self.compute_expenses()
+        self.scrape_images()
 
         popup_string = '<strong>' + self.name + '</strong>' + '<br>' + "Duration: " + str(self.duration) + ' days' + '<br>'  + 'Benders: ' + str(self.bender) + '<br>'+"Expenses: " + str(self.expenses) + "EUR"
         path = 'data/raw/images/'+self.name+'/'
@@ -404,7 +405,7 @@ def make_expense_ts(days_ts, tot_expenses):
             df['days'].iloc[i] = 1
             df['expenses'].iloc[i] = expense
         
-    df['days'] = df['days'].cumsum().apply(round)
+    df['days'] = df['days'].cumsum().apply(round).apply(int)
     df['cumulative expenses'] = df['expenses'].cumsum()
 
     return df
@@ -412,7 +413,7 @@ def make_expense_ts(days_ts, tot_expenses):
 def plot_expenses(df, budget, gas_expenses, city_expenses):
     df = df.apply(round)
     df['over_under'] = np.where(df['cumulative expenses']<budget,'Under Budget','Over Budget')
-    pie_df = pd.DataFrame([])
+    pie_df = pd.DataFrame(dict(type=['Gas','City'], amount= [sum(gas_expenses),sum(city_expenses)]))
     
     index = 'days'
     columns=['expenses','cumulative expenses']
@@ -421,18 +422,16 @@ def plot_expenses(df, budget, gas_expenses, city_expenses):
     balance = budget-tot_exp
     
     
-    fig = px.line(df,x=index,y=columns[1])
+    fig = px.line(df,x=index,y=columns[1],title='Expenses over time')
     fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
     fig.update_traces(line=dict(color="firebrick", width=4), marker_color='firebrick')
     fig2 = px.bar(df, x=index, y=columns[0], text_auto=True, color='over_under')
-    try:
+    if len(fig2.data)==1:
+        fig.add_trace(fig2.data[0])
+    if len(fig2.data)==2:
         fig.add_trace(fig2.data[0])
         fig.add_trace(fig2.data[1])
-    except:
-        try:
-            fig.add_trace(fig2.data[1])
-        except:
-            fig.add_trace(fig2.data[0])
+
     
     col1, col2, col3 = st.columns(3)
     
@@ -452,7 +451,10 @@ def plot_expenses(df, budget, gas_expenses, city_expenses):
     with col1:
         st.plotly_chart(fig)
     with col2:
-        fig = px.pie(pie_df)
+        fig = px.pie(pie_df, values='amount',names='type',title='Expenses breakdown', hole=.4, color_discrete_sequence=px.colors.sequential.RdBu)
+        fig.update_layout({'plot_bgcolor': 'rgba(0, 0, 0, 0)','paper_bgcolor': 'rgba(0, 0, 0, 0)',})
+        st.plotly_chart(fig)
+
 
      
    
