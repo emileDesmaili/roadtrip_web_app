@@ -221,34 +221,39 @@ class City:
     
     
     def scrape_images(self, max_results=5):
-        """method to scrape images from duckduckgo and save them
+        """method to scrape images from duckduckgo 
 
         Returns:
-            
+            image urls
         """
-        duckduckgo_search('data/raw/images', self.name,self.name, max_results=max_results)
+        self.images = duckduckgo_scrape_urls(self.name, max_results=max_results)
     
     def display_image(self, max_results=5):
         """methods to display image in streamlit page
 
         Args:
-            max_results (int, optional): number of scraped images. Defaults to 10.
+            max_results (int, optional): number of scraped images. Defaults to 5.
         """
-        
-        path = 'data/raw/images/' + self.name
-        globpath = path + '/*.jpg'
-        images = glob.glob(path)
-        image_list = []
-
-        #scrape only if directory doesn't exist
-        if not os.path.isdir(path):
-            self.scrape_images()
-        for img in glob.glob(globpath):
-            image_list.append(cv2.imread(img))
-        cols = st.columns(len(image_list))
+        self.scrape_images()
+        cols = st.columns(min(len(self.images),max_results))
         for a, x in enumerate(cols):
             with x:
-                st.image(image_list[a], use_column_width=False, width=250, channels='BGR')
+                st.image(self.images[a], use_column_width=False, width=250)
+
+        # path = 'data/raw/images/' + self.name
+        # globpath = path + '/*.jpg'
+        # images = glob.glob(path)
+        # image_list = []
+
+        # #scrape only if directory doesn't exist
+        # if not os.path.isdir(path):
+        #     self.scrape_images(max_results = max_results)
+        # for img in glob.glob(globpath):
+        #     image_list.append(cv2.imread(img))
+        # cols = st.columns(min(len(image_list),7))
+        # for a, x in enumerate(cols):
+        #     with x:
+        #         st.image(image_list[a], use_column_width=False, width=250, channels='BGR')
 
     def compute_expenses(self):
         """computes expenses of the trip based on the user's form and the city's price index
@@ -267,17 +272,12 @@ class City:
         """ creates a formatted popup for Folium map using expenses, duration
         """
         self.compute_expenses()
-        path_ = 'data/raw/images/' + self.name
-        if os.path.isdir(path_):
-            pass
-        else:
-            self.scrape_images()
+        self.scrape_images()
 
         popup_string = '<strong>' + self.name + '</strong>' + '<br>' + "Duration: " + str(self.duration) + ' days' + '<br>'  + 'Benders: ' + str(self.bender) + '<br>'+"Expenses: " + str(self.expenses) + "EUR"
-        path = 'data/raw/images/'+self.name+'/'
-        path = path+os.listdir(path)[0]
-        encoded = base64.b64encode(open(path, 'rb').read())
-        html = popup_string+'<img src="data:image/jpg; base64,{}" style="width:150px; height:100px"><br>'
+        url = self.images[0]
+        encoded = base64.b64encode(requests.get(url).content)
+        html = popup_string+f'<img src="{url}"' + 'style="width:150px; height:100px"><br>'
         html = html.format
         iframe = IFrame(html(encoded.decode('UTF-8')), width=200, height=200)
         popup = folium.Popup(iframe, max_width=400)
