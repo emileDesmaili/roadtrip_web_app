@@ -7,9 +7,7 @@ This streamlit webapp is inspired by my long-awaited road-trip in the U.S. for s
 # Some features include:
 - interactive map with estimation of driving time, distance & gas cost
 - city by city zoom with images, news, weather, & average cost per stay
-- TODO: budget dashboard 
-- TODO: city recommenders system?
-- TODO: GAN to generate fake city from all city images? 
+- budget dashboard 
 
 # To use the deployed app (which is still in v0)
 - add this chrome plugin! 'https://chrome.google.com/webstore/detail/ignore-x-frame-headers/gleekbfjekiniecknbkamfmkohkpodhe/related?hl=en
